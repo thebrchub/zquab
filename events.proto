@@ -1,0 +1,13 @@
+syntax = "proto3";
+package eventspb;
+
+message MatchFound {
+    string room_id          = 1;
+    string partner_id       = 2;
+    string partner_avatar   = 3;
+    string partner_location = 4;
+}
+
+message StrangerDisconnected {
+    string room_id = 1;
+}

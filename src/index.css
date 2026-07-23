@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  /* Typography */
+  --font-sans: "Outfit", "Inter", sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: #F8FAFC;
+    --card: #FFFFFF;
+    --text-main: #111827;
+    --text-muted: #6B7280;
+    --border-color: #E5E7EB;
+    
+    /* Glass variables for Light Mode */
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.4);
+  }
+
+  .dark {
+    --background: #09090B;
+    --card: #18181B;
+    --text-main: #FAFAFA;
+    --text-muted: #9CA3AF;
+    --border-color: #27272A;
+
+    /* Glass variables for Dark Mode */
+    --glass-bg: rgba(0, 0, 0, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.05);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    position: relative;
+  }
+}
+
+/* Bulletproof Glassmorphism */
+@layer utilities {
+  .glass {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+}
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Firefox compatibility */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
