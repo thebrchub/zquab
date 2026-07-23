@@ -243,6 +243,14 @@ export class ChatClient {
 
   async enterMatch() {
     await this.restPost('/api/v1/match/enter', {});
+
+    // A match_found event may have already arrived over the WebSocket while
+    // this request was in flight. Don't clobber the resulting 'connected'
+    // status back to 'searching'.
+    if (this.currentRoomId) {
+      return;
+    }
+
     this.callbacks.onSystemMessage('Searching for a stranger...');
     this.callbacks.onStatusChange('searching');
   }
