@@ -140,8 +140,8 @@ export class ChatClient {
           case 'match_found': {
             if (!this.MatchFound) break;
             const match = this.MatchFound.decode(payload) as any;
-            const roomId = match.room_id as string;
-            const partnerId = match.partner_id as string;
+            const roomId = match.roomId as string;
+            const partnerId = match.partnerId as string;
             this.currentRoomId = roomId;
             this.callbacks.onMatchFound(roomId, partnerId);
             this.callbacks.onStatusChange('connected');
@@ -171,18 +171,23 @@ export class ChatClient {
           case 'stranger_disconnected': {
             if (!this.StrangerDisconnected) break;
             const disconnected = this.StrangerDisconnected.decode(payload) as any;
-            const roomId = disconnected.room_id as string;
-            
-            if (roomId === this.currentRoomId) {
-              this.currentRoomId = null;
-            }
-            
+            const roomId = disconnected.roomId as string;
+
+            // Ignore stale events for a room we've already left (e.g. after "Next").
+            if (roomId !== this.currentRoomId) break;
+
+            this.currentRoomId = null;
             this.callbacks.onStatusChange('disconnected');
             this.callbacks.onSystemMessage('The stranger disconnected.');
             this.callbacks.onDisconnected('Stranger disconnected');
             break;
           }
           case 'room_closed': {
+            const closedRoomId = envelope.roomId as string;
+
+            // Ignore stale events for a room we've already left (e.g. after "Next").
+            if (closedRoomId && closedRoomId !== this.currentRoomId) break;
+
             this.currentRoomId = null;
             this.callbacks.onStatusChange('disconnected');
             this.callbacks.onSystemMessage('Chat room closed.');
