@@ -19,8 +19,8 @@ type ChatCallbackOptions = {
 };
 
 interface IpApiResponse {
-  country: string;
-  countryCode: string;
+  country: string;      // alpha-2 code, e.g. "IN" (despite the name, this is the code — ipapi.co's full name field is `country_name`)
+  country_name: string; // full country name, e.g. "India"
 }
 
 type ChatMessage = {
@@ -83,14 +83,12 @@ export class ChatClient {
       const res = await fetch('https://ipapi.co/json/');
       if (!res.ok) throw new Error('Unable to determine location');
       const data: IpApiResponse = await res.json();
-      this.locationCode = data.countryCode || null;
-      console.log('[chatClient] detectLocation resolved:', { countryCode: data.countryCode, country: data.country, locationCode: this.locationCode });
+      this.locationCode = data.country || null;
       this.callbacks.onLocationDetected?.({
-        name: data.country || 'Unknown country',
-        code: data.countryCode || '',
+        name: data.country_name || 'Unknown country',
+        code: data.country || '',
       });
-    } catch (err) {
-      console.log('[chatClient] detectLocation failed:', err);
+    } catch {
       this.locationCode = null;
       this.callbacks.onLocationDetected?.({ name: 'Location unavailable', code: '' });
     }
@@ -187,7 +185,6 @@ export class ChatClient {
             const roomId = match.roomId as string;
             const partnerId = match.partnerId as string;
             const partnerLocation = match.partnerLocation as string | undefined;
-            console.log('[chatClient] match_found decoded:', match, '| partnerLocation:', partnerLocation);
             this.currentRoomId = roomId;
             this.callbacks.onMatchFound(roomId, partnerId, partnerLocation);
             this.callbacks.onStatusChange('connected');
@@ -306,9 +303,7 @@ export class ChatClient {
   }
 
   async enterMatch() {
-    const body = this.locationCode ? { location: this.locationCode } : {};
-    console.log('[chatClient] enterMatch sending body:', body);
-    await this.restPost('/api/v1/match/enter', body);
+    await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
 
     // A match_found event may have already arrived over the WebSocket while
     // this request was in flight. Don't clobber the resulting 'connected'

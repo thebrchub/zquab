@@ -25,6 +25,7 @@ export default function ChatPage() {
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
   const hasSharedPhotoRef = useRef(false);
+  const hasReceivedPhotoRef = useRef(false);
 
   const clearPhotoRequestTimeout = () => {
     if (photoRequestTimeoutRef.current !== null) {
@@ -44,6 +45,7 @@ export default function ChatPage() {
       },
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
         hasSharedPhotoRef.current = false;
+        hasReceivedPhotoRef.current = false;
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -89,6 +91,7 @@ export default function ChatPage() {
       onPhotoReady: (_roomId, _from, url, expiresAt) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
+        hasReceivedPhotoRef.current = true;
         const minutesLeft = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
         setMessages((prev) => [...prev, {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -143,6 +146,7 @@ export default function ChatPage() {
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
     hasSharedPhotoRef.current = false;
+    hasReceivedPhotoRef.current = false;
     clearPhotoRequestTimeout();
   };
 
@@ -152,6 +156,10 @@ export default function ChatPage() {
   const PHOTO_REQUEST_TIMEOUT_MS = 60_000;
 
   const handleRequestPhoto = () => {
+    if (hasReceivedPhotoRef.current) {
+      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: "You've already received a photo from this stranger." }]);
+      return;
+    }
     setPhotoRequestBusy(true);
     chatClient.requestPhoto()
       .then(() => {
