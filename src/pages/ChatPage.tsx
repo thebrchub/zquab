@@ -3,7 +3,7 @@ import ReactCountryFlag from 'react-country-flag';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
-import { Loader2, UserPlus, MoreVertical, Flag, ShieldBan, LogOut } from 'lucide-react';
+import { Loader2, UserPlus, MoreVertical, Flag, ShieldBan, LogOut, Image, Check, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
@@ -24,7 +24,10 @@ export default function ChatPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
+  const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
+  const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   const chatClient = useMemo(() => {
     return new ChatClient({
@@ -59,6 +62,27 @@ export default function ChatPage() {
       },
       onError: (error) => {
         setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Error: ${error}` }]);
+      },
+      onPhotoRequest: () => {
+        setIncomingPhotoRequest(true);
+        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: 'Stranger wants to see a photo of you.' }]);
+      },
+      onPhotoResponse: (_roomId, _from, accepted) => {
+        setPhotoRequestBusy(false);
+        setSystemMessages((prev) => [...prev, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.',
+        }]);
+      },
+      onPhotoReady: (_roomId, _from, url, expiresAt) => {
+        setPhotoRequestBusy(false);
+        const minutesLeft = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
+        setMessages((prev) => [...prev, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          text: `This photo disappears in about ${minutesLeft} min.`,
+          isOwn: false,
+          imageUrl: url,
+        }]);
       },
     });
   }, []);
@@ -120,6 +144,39 @@ export default function ChatPage() {
     });
     setMessages([]);
     setShowMobileMenu(false);
+    setIncomingPhotoRequest(false);
+    setPhotoRequestBusy(false);
+  };
+
+  const handleRequestPhoto = () => {
+    setPhotoRequestBusy(true);
+    chatClient.requestPhoto().catch((error) => {
+      setPhotoRequestBusy(false);
+      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to request a photo: ${error}` }]);
+    });
+  };
+
+  const handleDeclinePhotoRequest = () => {
+    setIncomingPhotoRequest(false);
+    chatClient.declinePhotoRequest().catch(() => {});
+  };
+
+  const handleAcceptPhotoRequest = () => {
+    setIncomingPhotoRequest(false);
+    photoFileInputRef.current?.click();
+  };
+
+  const handlePhotoFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    chatClient.sharePhoto(file)
+      .then(() => {
+        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: 'Photo sent.' }]);
+      })
+      .catch((error) => {
+        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to send photo: ${error}` }]);
+      });
   };
 
   return (
@@ -228,15 +285,59 @@ export default function ChatPage() {
                 {msg.text}
               </div>
             ) : (
-              <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} />
+              <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
             )
           ))}
           <div ref={messagesEndRef} />
         </div>
-        
+
+        {/* Hidden file input used to fulfil an accepted incoming photo request */}
+        <input
+          ref={photoFileInputRef}
+          type="file"
+          accept="image/jpeg,image/webp,image/avif,image/png"
+          className="hidden"
+          onChange={handlePhotoFileSelected}
+        />
+
+        {/* Incoming photo request prompt */}
+        <AnimatePresence>
+          {incomingPhotoRequest && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-xl border border-[var(--border-color)] shadow-xl p-4 z-30"
+            >
+              <p className="text-sm font-medium text-[var(--text-main)] mb-3 flex items-center gap-2">
+                <Image className="w-4 h-4 text-[#3B82F6]" /> Stranger wants to see a photo of you.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleDeclinePhotoRequest}
+                  className="flex items-center justify-center gap-2 glass hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 text-[var(--text-muted)] py-2.5 rounded-xl font-medium transition-all"
+                >
+                  <X className="w-4 h-4" /> Decline
+                </button>
+                <button
+                  onClick={handleAcceptPhotoRequest}
+                  className="flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white py-2.5 rounded-xl font-medium transition-all"
+                >
+                  <Check className="w-4 h-4" /> Accept
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Input Area */}
         <div className="flex-shrink-0 z-10" onClick={() => setShowMobileMenu(false)}>
-          <ChatInput onSend={handleSend} disabled={status !== 'connected'} />
+          <ChatInput
+            onSend={handleSend}
+            disabled={status !== 'connected'}
+            onRequestPhoto={handleRequestPhoto}
+            photoRequestDisabled={photoRequestBusy}
+          />
         </div>
       </div>
 

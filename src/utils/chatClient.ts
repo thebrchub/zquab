@@ -11,6 +11,9 @@ type ChatCallbackOptions = {
   onSocketOpen?: () => void;
   onSocketClose?: (code: number, reason: string) => void;
   onError?: (error: string) => void;
+  onPhotoRequest?: (roomId: string, from: string) => void;
+  onPhotoResponse?: (roomId: string, from: string, accepted: boolean) => void;
+  onPhotoReady?: (roomId: string, from: string, url: string, expiresAt: number) => void;
 };
 
 type ChatMessage = {
@@ -18,6 +21,7 @@ type ChatMessage = {
   text: string;
   isOwn: boolean;
   isSystem?: boolean;
+  imageUrl?: string;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
@@ -39,6 +43,9 @@ export class ChatClient {
   private MatchFound: protobuf.Type | null = null;
   private StrangerDisconnected: protobuf.Type | null = null;
   private SystemEvent: protobuf.Type | null = null;
+  private PhotoRequestProto: protobuf.Type | null = null;
+  private PhotoResponseProto: protobuf.Type | null = null;
+  private PhotoReadyProto: protobuf.Type | null = null;
 
   constructor(callbacks: ChatCallbackOptions) {
     this.callbacks = callbacks;
@@ -79,6 +86,9 @@ export class ChatClient {
     this.SystemEvent = root.lookupType('chatpb.SystemEvent');
     this.MatchFound = root.lookupType('eventspb.MatchFound');
     this.StrangerDisconnected = root.lookupType('eventspb.StrangerDisconnected');
+    this.PhotoRequestProto = root.lookupType('eventspb.PhotoRequest');
+    this.PhotoResponseProto = root.lookupType('eventspb.PhotoResponse');
+    this.PhotoReadyProto = root.lookupType('eventspb.PhotoReady');
   }
 
   async ensureGuest() {
@@ -203,6 +213,24 @@ export class ChatClient {
             this.callbacks.onSystemMessage(message);
             break;
           }
+          case 'photo_request': {
+            if (!this.PhotoRequestProto) break;
+            const req = this.PhotoRequestProto.decode(payload) as any;
+            this.callbacks.onPhotoRequest?.(req.roomId as string, req.from as string);
+            break;
+          }
+          case 'photo_response': {
+            if (!this.PhotoResponseProto) break;
+            const res = this.PhotoResponseProto.decode(payload) as any;
+            this.callbacks.onPhotoResponse?.(res.roomId as string, res.from as string, Boolean(res.accepted));
+            break;
+          }
+          case 'photo_ready': {
+            if (!this.PhotoReadyProto) break;
+            const ready = this.PhotoReadyProto.decode(payload) as any;
+            this.callbacks.onPhotoReady?.(ready.roomId as string, ready.from as string, ready.url as string, Number(ready.expiresAt));
+            break;
+          }
         }
       } catch (error) {
         this.callbacks.onError?.(String(error));
@@ -311,6 +339,51 @@ export class ChatClient {
     await this.sendMatchAction(this.currentRoomId, 'block');
     this.currentRoomId = null;
     this.callbacks.onStatusChange('disconnected');
+  }
+
+  // ---------------------------------------------------------------------
+  // Stranger photo sharing — request/approve, then a direct client<->R2
+  // upload via presigned URL. The backend never sees the photo bytes.
+  // ---------------------------------------------------------------------
+
+  async requestPhoto() {
+    if (!this.currentRoomId) throw new Error('No active room');
+    await this.restPost('/api/v1/match/photo/request', { room_id: this.currentRoomId });
+  }
+
+  async declinePhotoRequest() {
+    if (!this.currentRoomId) return;
+    await this.restPost('/api/v1/match/photo/respond', { room_id: this.currentRoomId, accept: false });
+  }
+
+  /** Accepts a pending photo request, uploads the file directly to storage, and confirms delivery. */
+  async sharePhoto(file: File) {
+    if (!this.currentRoomId) throw new Error('No active room');
+
+    const respondBody = { room_id: this.currentRoomId, accept: true, content_type: file.type };
+    const respondResult = (await this.restPost('/api/v1/match/photo/respond', respondBody)) as {
+      status?: string;
+      url?: string;
+      object_key?: string;
+    } | null;
+
+    if (!respondResult?.url || !respondResult.object_key) {
+      throw new Error('No upload URL received');
+    }
+
+    const uploadResponse = await fetch(respondResult.url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(`Photo upload failed: ${uploadResponse.status}`);
+    }
+
+    await this.restPost('/api/v1/match/photo/uploaded', {
+      room_id: this.currentRoomId,
+      object_key: respondResult.object_key,
+    });
   }
 
   shutdown() {

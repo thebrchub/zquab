@@ -4,9 +4,10 @@ import { twMerge } from 'tailwind-merge';
 interface Props {
   message: string;
   isOwn: boolean;
+  imageUrl?: string;
 }
 
-export default function MessageBubble({ message, isOwn }: Props) {
+export default function MessageBubble({ message, isOwn, imageUrl }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -19,7 +20,18 @@ export default function MessageBubble({ message, isOwn }: Props) {
           ? "bg-[#3B82F6] text-white rounded-br-sm"
           : "glass text-[var(--text-main)] rounded-bl-sm border border-[var(--border-color)]"
       )}>
-        {message}
+        {imageUrl ? (
+          <div className="flex flex-col gap-2">
+            <img
+              src={imageUrl}
+              alt="Shared photo"
+              className="max-w-full max-h-64 rounded-xl object-contain"
+            />
+            {message && <span>{message}</span>}
+          </div>
+        ) : (
+          message
+        )}
       </div>
     </motion.div>
   );

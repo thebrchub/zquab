@@ -11,3 +11,24 @@ message MatchFound {
 message StrangerDisconnected {
     string room_id = 1;
 }
+
+// MsgType "photo_request"
+message PhotoRequest {
+    string room_id = 1;
+    string from    = 2; // requester userID
+}
+
+// MsgType "photo_response"
+message PhotoResponse {
+    string room_id  = 1;
+    string from     = 2; // responder userID
+    bool   accepted = 3;
+}
+
+// MsgType "photo_ready"
+message PhotoReady {
+    string room_id    = 1;
+    string from       = 2; // uploader userID
+    string url        = 3; // presigned GET URL, short-lived
+    int64  expires_at = 4; // epoch ms when the URL/object expires
+}

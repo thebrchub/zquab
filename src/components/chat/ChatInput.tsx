@@ -1,12 +1,14 @@
-import { Send, Smile } from 'lucide-react';
+import { Send, Smile, Image } from 'lucide-react';
 import { useState } from 'react';
 
 interface Props {
   onSend: (msg: string) => void;
   disabled: boolean;
+  onRequestPhoto?: () => void;
+  photoRequestDisabled?: boolean;
 }
 
-export default function ChatInput({ onSend, disabled }: Props) {
+export default function ChatInput({ onSend, disabled, onRequestPhoto, photoRequestDisabled }: Props) {
   const [text, setText] = useState('');
 
   const handleSend = () => {
@@ -24,6 +26,18 @@ export default function ChatInput({ onSend, disabled }: Props) {
         >
           <Smile className="w-6 h-6" />
         </button>
+
+        {onRequestPhoto && (
+          <button
+            type="button"
+            onClick={onRequestPhoto}
+            disabled={disabled || photoRequestDisabled}
+            title="Ask for a photo"
+            className="p-2 text-[var(--text-muted)] hover:text-[#3B82F6] transition-colors disabled:opacity-50"
+          >
+            <Image className="w-6 h-6" />
+          </button>
+        )}
         
         <input
           type="text"
