@@ -24,6 +24,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
+  const hasSharedPhotoRef = useRef(false);
 
   const clearPhotoRequestTimeout = () => {
     if (photoRequestTimeoutRef.current !== null) {
@@ -42,6 +43,7 @@ export default function ChatPage() {
         setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text }]);
       },
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
+        hasSharedPhotoRef.current = false;
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -140,6 +142,7 @@ export default function ChatPage() {
     setShowMobileMenu(false);
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
+    hasSharedPhotoRef.current = false;
     clearPhotoRequestTimeout();
   };
 
@@ -172,6 +175,11 @@ export default function ChatPage() {
 
   const handleAcceptPhotoRequest = () => {
     setIncomingPhotoRequest(false);
+    if (hasSharedPhotoRef.current) {
+      chatClient.declinePhotoRequest().catch(() => {});
+      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: "You've already shared a photo in this chat." }]);
+      return;
+    }
     photoFileInputRef.current?.click();
   };
 
@@ -181,6 +189,7 @@ export default function ChatPage() {
     if (!file) return;
     chatClient.sharePhoto(file)
       .then(() => {
+        hasSharedPhotoRef.current = true;
         // The backend only delivers `photo_ready` (with the presigned URL) to
         // the requester — the uploader never gets it back over the socket.
         // Show a local preview of what was sent so the sender can see it too.

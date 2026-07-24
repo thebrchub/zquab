@@ -84,11 +84,13 @@ export class ChatClient {
       if (!res.ok) throw new Error('Unable to determine location');
       const data: IpApiResponse = await res.json();
       this.locationCode = data.countryCode || null;
+      console.log('[chatClient] detectLocation resolved:', { countryCode: data.countryCode, country: data.country, locationCode: this.locationCode });
       this.callbacks.onLocationDetected?.({
         name: data.country || 'Unknown country',
         code: data.countryCode || '',
       });
-    } catch {
+    } catch (err) {
+      console.log('[chatClient] detectLocation failed:', err);
       this.locationCode = null;
       this.callbacks.onLocationDetected?.({ name: 'Location unavailable', code: '' });
     }
@@ -185,6 +187,7 @@ export class ChatClient {
             const roomId = match.roomId as string;
             const partnerId = match.partnerId as string;
             const partnerLocation = match.partnerLocation as string | undefined;
+            console.log('[chatClient] match_found decoded:', match, '| partnerLocation:', partnerLocation);
             this.currentRoomId = roomId;
             this.callbacks.onMatchFound(roomId, partnerId, partnerLocation);
             this.callbacks.onStatusChange('connected');
@@ -303,7 +306,9 @@ export class ChatClient {
   }
 
   async enterMatch() {
-    await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
+    const body = this.locationCode ? { location: this.locationCode } : {};
+    console.log('[chatClient] enterMatch sending body:', body);
+    await this.restPost('/api/v1/match/enter', body);
 
     // A match_found event may have already arrived over the WebSocket while
     // this request was in flight. Don't clobber the resulting 'connected'
@@ -452,7 +457,16 @@ export class ChatClient {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`API ${endpoint} failed: ${response.status} ${text}`);
+      // Backend errors are JSON: {"error": "message"} — surface just the
+      // message when present instead of the raw status+body blob.
+      let message = text;
+      try {
+        const parsed = JSON.parse(text) as { error?: string };
+        if (parsed.error) message = parsed.error;
+      } catch {
+        // not JSON — fall back to the raw text
+      }
+      throw new Error(message);
     }
 
     return response.json().catch(() => null);
