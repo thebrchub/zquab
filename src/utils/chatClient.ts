@@ -290,6 +290,22 @@ export class ChatClient {
     this.callbacks.onStatusChange('searching');
   }
 
+  /**
+   * Best-effort queue cleanup with no state/callback side effects — for use
+   * on unmount/page-unload where updating React state is pointless (or
+   * impossible) and we just want the server to drop the stale queue entry.
+   * `keepalive` lets the request outlive a page unload (e.g. tab close).
+   */
+  leaveQueueSilently(keepalive = false) {
+    fetch(`${API_BASE}/api/v1/match/leave`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      keepalive,
+    }).catch(() => {});
+  }
+
   async sendMatchAction(roomId: string, action: 'skip' | 'block' | 'friend') {
     await this.restPost('/api/v1/match/action', { room_id: roomId, action });
   }

@@ -28,6 +28,14 @@ export default function ChatPage() {
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
+  const photoRequestTimeoutRef = useRef<number | null>(null);
+
+  const clearPhotoRequestTimeout = () => {
+    if (photoRequestTimeoutRef.current !== null) {
+      window.clearTimeout(photoRequestTimeoutRef.current);
+      photoRequestTimeoutRef.current = null;
+    }
+  };
 
   const chatClient = useMemo(() => {
     return new ChatClient({
@@ -68,6 +76,7 @@ export default function ChatPage() {
         setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: 'Stranger wants to see a photo of you.' }]);
       },
       onPhotoResponse: (_roomId, _from, accepted) => {
+        clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
         setSystemMessages((prev) => [...prev, {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -75,6 +84,7 @@ export default function ChatPage() {
         }]);
       },
       onPhotoReady: (_roomId, _from, url, expiresAt) => {
+        clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
         const minutesLeft = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
         setMessages((prev) => [...prev, {
@@ -92,8 +102,20 @@ export default function ChatPage() {
       setSystemMessages((prev) => [...prev, { id: 'sys-error', text: 'Unable to start chat client.' }]);
       console.error(error);
     });
+
+    // Best-effort: drop the stale matchmaking-queue entry if the tab is
+    // closed/refreshed outright (unmount cleanup below won't run in time
+    // for that case since the page is already gone).
+    const handleBeforeUnload = () => {
+      chatClient.leaveQueueSilently(true);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      chatClient.leaveQueueSilently();
       chatClient.shutdown();
+      clearPhotoRequestTimeout();
     };
   }, [chatClient]);
 
@@ -146,14 +168,29 @@ export default function ChatPage() {
     setShowMobileMenu(false);
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
+    clearPhotoRequestTimeout();
   };
+
+  // Mirrors the backend's PhotoRequestTTL (60s) — the pending request key in
+  // Redis silently expires with no WS notification, so without this the UI
+  // would wait forever if the stranger never accepts/declines.
+  const PHOTO_REQUEST_TIMEOUT_MS = 60_000;
 
   const handleRequestPhoto = () => {
     setPhotoRequestBusy(true);
-    chatClient.requestPhoto().catch((error) => {
-      setPhotoRequestBusy(false);
-      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to request a photo: ${error}` }]);
-    });
+    chatClient.requestPhoto()
+      .then(() => {
+        clearPhotoRequestTimeout();
+        photoRequestTimeoutRef.current = window.setTimeout(() => {
+          photoRequestTimeoutRef.current = null;
+          setPhotoRequestBusy(false);
+          setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: "Stranger didn't respond to your photo request." }]);
+        }, PHOTO_REQUEST_TIMEOUT_MS);
+      })
+      .catch((error) => {
+        setPhotoRequestBusy(false);
+        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to request a photo: ${error}` }]);
+      });
   };
 
   const handleDeclinePhotoRequest = () => {
