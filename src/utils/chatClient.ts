@@ -1,4 +1,6 @@
 import protobuf from 'protobufjs'; // You can usually drop the /dist/ part in Vite
+import chatProtoSrc from '../proto/chat.proto?raw';
+import eventsProtoSrc from '../proto/events.proto?raw';
 
 type Status = 'searching' | 'connected' | 'disconnected';
 
@@ -94,25 +96,13 @@ export class ChatClient {
     }
   }
 
- private async loadProtos() {
-    // 1. Fetch the files manually using browser fetch
-    const [chatRes, eventsRes] = await Promise.all([
-      fetch('/chat.proto'),
-      fetch('/events.proto')
-    ]);
-
-    if (!chatRes.ok || !eventsRes.ok) {
-      throw new Error('Failed to fetch .proto files from the public folder');
-    }
-
-    const chatText = await chatRes.text();
-    const eventsText = await eventsRes.text();
-
-    // 2. Parse the strings directly in memory to bypass the 'fs' dependency
+  private async loadProtos() {
+    // Bundled at build time (Vite `?raw` import) instead of fetched at
+    // runtime — keeps the schema out of the network tab entirely.
     const root = new protobuf.Root();
-    protobuf.parse(chatText, root);
-    protobuf.parse(eventsText, root);
-    
+    protobuf.parse(chatProtoSrc, root);
+    protobuf.parse(eventsProtoSrc, root);
+
     this.Envelope = root.lookupType('chatpb.Envelope');
     this.ChatMessageProto = root.lookupType('chatpb.ChatMessage');
     this.SystemEvent = root.lookupType('chatpb.SystemEvent');

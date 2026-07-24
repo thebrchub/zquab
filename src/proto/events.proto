@@ -12,6 +12,9 @@ message StrangerDisconnected {
     string room_id = 1;
 }
 
+// Stranger photo sharing (request/approve, relay-free — the actual bytes go
+// direct client<->R2 via presigned URLs, never through the backend).
+
 // MsgType "photo_request"
 message PhotoRequest {
     string room_id = 1;

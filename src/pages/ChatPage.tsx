@@ -21,6 +21,7 @@ export default function ChatPage() {
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
+  const [hasReceivedPhoto, setHasReceivedPhoto] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
@@ -46,6 +47,7 @@ export default function ChatPage() {
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
         hasSharedPhotoRef.current = false;
         hasReceivedPhotoRef.current = false;
+        setHasReceivedPhoto(false);
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -92,6 +94,7 @@ export default function ChatPage() {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
         hasReceivedPhotoRef.current = true;
+        setHasReceivedPhoto(true);
         const minutesLeft = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
         setMessages((prev) => [...prev, {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -147,6 +150,7 @@ export default function ChatPage() {
     setPhotoRequestBusy(false);
     hasSharedPhotoRef.current = false;
     hasReceivedPhotoRef.current = false;
+    setHasReceivedPhoto(false);
     clearPhotoRequestTimeout();
   };
 
@@ -371,7 +375,7 @@ export default function ChatPage() {
             onSend={handleSend}
             disabled={status !== 'connected'}
             onRequestPhoto={handleRequestPhoto}
-            photoRequestDisabled={photoRequestBusy}
+            photoRequestDisabled={photoRequestBusy || hasReceivedPhoto}
           />
         </div>
       </div>
