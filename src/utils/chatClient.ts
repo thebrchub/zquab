@@ -6,7 +6,7 @@ type ChatCallbackOptions = {
   onStatusChange: (status: Status) => void;
   onIncomingMessage: (message: ChatMessage) => void;
   onSystemMessage: (text: string) => void;
-  onMatchFound: (roomId: string, partnerId: string) => void;
+  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string) => void;
   onDisconnected: (reason: string) => void;
   onSocketOpen?: () => void;
   onSocketClose?: (code: number, reason: string) => void;
@@ -142,8 +142,9 @@ export class ChatClient {
             const match = this.MatchFound.decode(payload) as any;
             const roomId = match.roomId as string;
             const partnerId = match.partnerId as string;
+            const partnerLocation = match.partnerLocation as string | undefined;
             this.currentRoomId = roomId;
-            this.callbacks.onMatchFound(roomId, partnerId);
+            this.callbacks.onMatchFound(roomId, partnerId, partnerLocation);
             this.callbacks.onStatusChange('connected');
             this.callbacks.onSystemMessage('Match found! Say hello.');
             break;

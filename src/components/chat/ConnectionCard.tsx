@@ -1,3 +1,4 @@
+import ReactCountryFlag from 'react-country-flag';
 import { UserPlus, Flag, ShieldBan, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -6,9 +7,11 @@ type Status = 'searching' | 'connected' | 'disconnected';
 interface Props {
   status: Status;
   onNext: () => void;
+  userCountry?: { name: string; code: string } | null;
+  partnerCountry?: { name: string; code: string } | null;
 }
 
-export default function ConnectionCard({ status, onNext }: Props) {
+export default function ConnectionCard({ status, onNext, userCountry, partnerCountry }: Props) {
   return (
     <div className="glass rounded-2xl p-6 flex flex-col h-full border border-[var(--border-color)] shadow-sm">
       <div className="mb-8">
@@ -39,6 +42,40 @@ export default function ConnectionCard({ status, onNext }: Props) {
       </div>
 
       <div className="space-y-3 mt-auto">
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--background)]/50 px-3 py-3 text-sm text-[var(--text-muted)]">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+            Your location
+          </div>
+          <div className="flex items-center gap-2">
+            {userCountry?.code ? (
+              <>
+                <ReactCountryFlag countryCode={userCountry.code} svg className="text-lg leading-none" />
+                <span className="font-medium text-[var(--text-main)]">{userCountry.name}</span>
+              </>
+            ) : (
+              <span>{userCountry?.name || 'Detecting location...'}</span>
+            )}
+          </div>
+        </div>
+
+        {partnerCountry && (
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--background)]/50 px-3 py-3 text-sm text-[var(--text-muted)]">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+              Stranger location
+            </div>
+            <div className="flex items-center gap-2">
+              {partnerCountry.code ? (
+                <>
+                  <ReactCountryFlag countryCode={partnerCountry.code} svg className="text-lg leading-none" />
+                  <span className="font-medium text-[var(--text-main)]">{partnerCountry.name}</span>
+                </>
+              ) : (
+                <span>{partnerCountry.name}</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <button 
           onClick={onNext} 
           className="w-full flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white py-3.5 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"

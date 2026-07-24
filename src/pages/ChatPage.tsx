@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import ReactCountryFlag from 'react-country-flag';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
@@ -11,11 +12,18 @@ type Status = 'searching' | 'connected' | 'disconnected';
 
 type SystemMessage = { id: string; text: string };
 
+interface IpApiResponse {
+  country: string;
+  countryCode: string;
+}
+
 export default function ChatPage() {
   const [status, setStatus] = useState<Status>('searching');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
+  const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const chatClient = useMemo(() => {
@@ -27,7 +35,19 @@ export default function ChatPage() {
       onSystemMessage: (text) => {
         setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text }]);
       },
-      onMatchFound: () => {},
+      onMatchFound: (_roomId, _partnerId, partnerLocation) => {
+        if (!partnerLocation) {
+          setPartnerCountry({ name: 'Unknown location', code: '' });
+          return;
+        }
+
+        const normalized = partnerLocation.trim();
+        if (/^[A-Za-z]{2}$/.test(normalized)) {
+          setPartnerCountry({ name: normalized.toUpperCase(), code: normalized.toUpperCase() });
+        } else {
+          setPartnerCountry({ name: normalized, code: '' });
+        }
+      },
       onDisconnected: () => {
         setStatus('disconnected');
       },
@@ -52,6 +72,35 @@ export default function ChatPage() {
       chatClient.shutdown();
     };
   }, [chatClient]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const getCountry = async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('Unable to determine location');
+
+        const data: IpApiResponse = await res.json();
+        if (!ignore) {
+          setUserCountry({
+            name: data.country || 'Unknown country',
+            code: data.countryCode || '',
+          });
+        }
+      } catch {
+        if (!ignore) {
+          setUserCountry({ name: 'Location unavailable', code: '' });
+        }
+      }
+    };
+
+    getCountry();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,7 +134,19 @@ export default function ChatPage() {
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
           
           {/* Desktop Title */}
-          <h2 className="font-bold text-lg text-[var(--text-main)] hidden md:block">Anonymous Chat</h2>
+          <div className="hidden md:flex items-center gap-3">
+            <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
+            <div className="flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--background)]/60 px-3 py-1 text-sm text-[var(--text-muted)]">
+              {userCountry?.code ? (
+                <>
+                  <ReactCountryFlag countryCode={userCountry.code} svg className="text-lg leading-none" />
+                  <span className="font-medium text-[var(--text-main)]">{userCountry.name}</span>
+                </>
+              ) : (
+                <span>{userCountry?.name || 'Detecting location...'}</span>
+              )}
+            </div>
+          </div>
           
           {/* Mobile Status Indicator */}
           <div className="md:hidden flex items-center gap-2">
@@ -96,6 +157,16 @@ export default function ChatPage() {
 
           {/* UX FIX 3: Mobile Integrated Controls */}
           <div className="flex md:hidden items-center gap-1.5">
+            <div className="flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--background)]/70 px-2.5 py-1 text-xs text-[var(--text-muted)]">
+              {userCountry?.code ? (
+                <>
+                  <ReactCountryFlag countryCode={userCountry.code} svg className="text-sm leading-none" />
+                  <span className="font-medium text-[var(--text-main)]">{userCountry.name}</span>
+                </>
+              ) : (
+                <span>{userCountry?.name || 'Detecting location...'}</span>
+              )}
+            </div>
             <button 
               onClick={handleNext}
               className="bg-[#3B82F6] hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-colors active:scale-95"
@@ -172,7 +243,7 @@ export default function ChatPage() {
       {/* Right: Controls Sidebar (Desktop Only) */}
       {/* UX FIX 5: Completely hidden on mobile breakpoints */}
       <div className="hidden md:block w-80 h-full flex-shrink-0">
-        <ConnectionCard status={status} onNext={handleNext} />
+        <ConnectionCard status={status} onNext={handleNext} userCountry={userCountry} partnerCountry={partnerCountry} />
       </div>
       
     </div>
