@@ -172,7 +172,16 @@ export default function ChatPage() {
     if (!file) return;
     chatClient.sharePhoto(file)
       .then(() => {
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: 'Photo sent.' }]);
+        // The backend only delivers `photo_ready` (with the presigned URL) to
+        // the requester — the uploader never gets it back over the socket.
+        // Show a local preview of what was sent so the sender can see it too.
+        const previewUrl = URL.createObjectURL(file);
+        setMessages((prev) => [...prev, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          text: '',
+          isOwn: true,
+          imageUrl: previewUrl,
+        }]);
       })
       .catch((error) => {
         setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to send photo: ${error}` }]);
