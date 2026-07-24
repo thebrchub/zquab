@@ -14,7 +14,14 @@ type ChatCallbackOptions = {
   onPhotoRequest?: (roomId: string, from: string) => void;
   onPhotoResponse?: (roomId: string, from: string, accepted: boolean) => void;
   onPhotoReady?: (roomId: string, from: string, url: string, expiresAt: number) => void;
+  /** Fired once the local IP-geolocation lookup resolves (or fails). */
+  onLocationDetected?: (country: { name: string; code: string } | null) => void;
 };
+
+interface IpApiResponse {
+  country: string;
+  countryCode: string;
+}
 
 type ChatMessage = {
   id: string;
@@ -47,18 +54,43 @@ export class ChatClient {
   private PhotoResponseProto: protobuf.Type | null = null;
   private PhotoReadyProto: protobuf.Type | null = null;
 
+  // Detected once at startup and sent along with /match/enter so the server
+  // can pass a `partner_location` through to the other side of a match.
+  private locationCode: string | null = null;
+
   constructor(callbacks: ChatCallbackOptions) {
     this.callbacks = callbacks;
   }
 
   async start() {
     try {
+      // Location detection runs in parallel — enterMatch() (fired from the
+      // socket's onopen) reads whatever locationCode has resolved to by
+      // then; a slow/failed lookup just means no location is sent, it
+      // never blocks connecting.
+      this.detectLocation();
       await this.loadProtos();
       await this.ensureGuest();
       this.connect();
     } catch (error) {
       this.callbacks.onError?.('Failed to initialize chat client.');
       console.error(error);
+    }
+  }
+
+  private async detectLocation() {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      if (!res.ok) throw new Error('Unable to determine location');
+      const data: IpApiResponse = await res.json();
+      this.locationCode = data.countryCode || null;
+      this.callbacks.onLocationDetected?.({
+        name: data.country || 'Unknown country',
+        code: data.countryCode || '',
+      });
+    } catch {
+      this.locationCode = null;
+      this.callbacks.onLocationDetected?.({ name: 'Location unavailable', code: '' });
     }
   }
 
@@ -271,7 +303,7 @@ export class ChatClient {
   }
 
   async enterMatch() {
-    await this.restPost('/api/v1/match/enter', {});
+    await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
 
     // A match_found event may have already arrived over the WebSocket while
     // this request was in flight. Don't clobber the resulting 'connected'

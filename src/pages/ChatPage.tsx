@@ -12,11 +12,6 @@ type Status = 'searching' | 'connected' | 'disconnected';
 
 type SystemMessage = { id: string; text: string };
 
-interface IpApiResponse {
-  country: string;
-  countryCode: string;
-}
-
 export default function ChatPage() {
   const [status, setStatus] = useState<Status>('searching');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -52,12 +47,18 @@ export default function ChatPage() {
           return;
         }
 
-        const normalized = partnerLocation.trim();
+        // The backend passes this through opaquely as raw JSON text, so a
+        // plain 2-letter code arrives wrapped in quotes (e.g. `"IN"`) —
+        // strip them before checking/displaying.
+        const normalized = partnerLocation.trim().replace(/^"|"$/g, '');
         if (/^[A-Za-z]{2}$/.test(normalized)) {
           setPartnerCountry({ name: normalized.toUpperCase(), code: normalized.toUpperCase() });
         } else {
           setPartnerCountry({ name: normalized, code: '' });
         }
+      },
+      onLocationDetected: (country) => {
+        setUserCountry(country);
       },
       onDisconnected: () => {
         setStatus('disconnected');
@@ -118,35 +119,6 @@ export default function ChatPage() {
       clearPhotoRequestTimeout();
     };
   }, [chatClient]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    const getCountry = async () => {
-      try {
-        const res = await fetch('https://ipapi.co/json/');
-        if (!res.ok) throw new Error('Unable to determine location');
-
-        const data: IpApiResponse = await res.json();
-        if (!ignore) {
-          setUserCountry({
-            name: data.country || 'Unknown country',
-            code: data.countryCode || '',
-          });
-        }
-      } catch {
-        if (!ignore) {
-          setUserCountry({ name: 'Location unavailable', code: '' });
-        }
-      }
-    };
-
-    getCountry();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
