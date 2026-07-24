@@ -21,12 +21,9 @@ export default function ChatPage() {
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
-  const [hasReceivedPhoto, setHasReceivedPhoto] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
-  const hasSharedPhotoRef = useRef(false);
-  const hasReceivedPhotoRef = useRef(false);
 
   const clearPhotoRequestTimeout = () => {
     if (photoRequestTimeoutRef.current !== null) {
@@ -45,9 +42,6 @@ export default function ChatPage() {
         setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text }]);
       },
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
-        hasSharedPhotoRef.current = false;
-        hasReceivedPhotoRef.current = false;
-        setHasReceivedPhoto(false);
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -93,8 +87,6 @@ export default function ChatPage() {
       onPhotoReady: (_roomId, _from, url, _expiresAt) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        hasReceivedPhotoRef.current = true;
-        setHasReceivedPhoto(true);
         setMessages((prev) => [...prev, {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           text: '',
@@ -147,22 +139,15 @@ export default function ChatPage() {
     setShowMobileMenu(false);
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
-    hasSharedPhotoRef.current = false;
-    hasReceivedPhotoRef.current = false;
-    setHasReceivedPhoto(false);
     clearPhotoRequestTimeout();
   };
 
-  // Mirrors the backend's PhotoRequestTTL (60s) — the pending request key in
-  // Redis silently expires with no WS notification, so without this the UI
-  // would wait forever if the stranger never accepts/declines.
-  const PHOTO_REQUEST_TIMEOUT_MS = 60_000;
+  // Grey out the "ask for photo" button for 30s after a request is sent so
+  // the stranger has time to respond, then re-enable it regardless of
+  // whether they answered — requests aren't capped per room anymore.
+  const PHOTO_REQUEST_TIMEOUT_MS = 30_000;
 
   const handleRequestPhoto = () => {
-    if (hasReceivedPhotoRef.current) {
-      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: "You've already received a photo from this stranger." }]);
-      return;
-    }
     setPhotoRequestBusy(true);
     chatClient.requestPhoto()
       .then(() => {
@@ -186,11 +171,6 @@ export default function ChatPage() {
 
   const handleAcceptPhotoRequest = () => {
     setIncomingPhotoRequest(false);
-    if (hasSharedPhotoRef.current) {
-      chatClient.declinePhotoRequest().catch(() => {});
-      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: "You've already shared a photo in this chat." }]);
-      return;
-    }
     photoFileInputRef.current?.click();
   };
 
@@ -200,7 +180,6 @@ export default function ChatPage() {
     if (!file) return;
     chatClient.sharePhoto(file)
       .then(() => {
-        hasSharedPhotoRef.current = true;
         // The backend only delivers `photo_ready` (with the presigned URL) to
         // the requester — the uploader never gets it back over the socket.
         // Show a local preview of what was sent so the sender can see it too.
@@ -374,7 +353,7 @@ export default function ChatPage() {
             onSend={handleSend}
             disabled={status !== 'connected'}
             onRequestPhoto={handleRequestPhoto}
-            photoRequestDisabled={photoRequestBusy || hasReceivedPhoto}
+            photoRequestDisabled={photoRequestBusy}
           />
         </div>
       </div>
