@@ -90,15 +90,14 @@ export default function ChatPage() {
           text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.',
         }]);
       },
-      onPhotoReady: (_roomId, _from, url, expiresAt) => {
+      onPhotoReady: (_roomId, _from, url, _expiresAt) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
         hasReceivedPhotoRef.current = true;
         setHasReceivedPhoto(true);
-        const minutesLeft = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
         setMessages((prev) => [...prev, {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          text: `This photo disappears in about ${minutesLeft} min.`,
+          text: '',
           isOwn: false,
           imageUrl: url,
         }]);
