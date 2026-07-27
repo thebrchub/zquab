@@ -1,6 +1,6 @@
 import { EyeOff, Lock, Server } from 'lucide-react';
 import { motion } from 'framer-motion';
-import CTAFooter from '../components/CTAFooter';
+
 
 export default function Privacy() {
   return (
