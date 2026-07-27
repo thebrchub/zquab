@@ -22,8 +22,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Hits the backend to mint a new guest identity, or reuses the existing cookie.
   const loginAsGuest = async () => {
     try {
-      const response = await apiClient.post<AuthUser>('/auth/guest');
-      setUser(response.data);
+      // Remove <AuthUser> here
+      const response = await apiClient.post('/auth/guest');
+      
+      // And cast the data as AuthUser here instead!
+      setUser(response.data as AuthUser);
     } catch (error) {
       console.error('Guest login failed:', error);
       throw error;
