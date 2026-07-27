@@ -1,5 +1,5 @@
 import ReactCountryFlag from 'react-country-flag';
-import { UserPlus, Flag, ShieldBan, LogOut } from 'lucide-react';
+import { UserPlus, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
