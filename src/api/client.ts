@@ -1,8 +1,11 @@
 // Define the base URL for local vs Vercel production
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'https://api.zquab.com');
+const HOST = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? '' : 'https://api.zquab.com');
+
+const API_BASE = `${HOST}/api/v1`;
 
 // The core fetch logic handling credentials, headers, and errors
 const fetchWrapper = async (endpoint: string, options: RequestInit = {}) => {
+  // If endpoint is '/auth/guest', url becomes 'https://api.zquab.com/api/v1/auth/guest'
   const url = `${API_BASE}${endpoint}`;
   
   const response = await fetch(url, {
