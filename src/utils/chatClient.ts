@@ -33,8 +33,8 @@ type ChatMessage = {
   imageUrl?: string;
 };
 
-const API_BASE = 'https://api.zquab.com';
-const WS_BASE = 'wss://api.zquab.com';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'wss://api.zquab.com';
 
 export class ChatClient {
   private socket: WebSocket | null = null;
