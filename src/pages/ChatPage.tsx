@@ -3,27 +3,51 @@ import ReactCountryFlag from 'react-country-flag';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
-import { Loader2, UserPlus, MoreVertical, Flag, ShieldBan, LogOut, Image, Check, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, HeartHandshake, ImageMinus, UserX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
+import { useAuth } from '../context/AuthContext';
 
-type Status = 'searching' | 'connected' | 'disconnected';
+type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
 type SystemMessage = { id: string; text: string };
 
 export default function ChatPage() {
-  const [status, setStatus] = useState<Status>('searching');
+  const { user } = useAuth();
+  const [status, setStatus] = useState<Status>('idle');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  
+  // Rules Modal State
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [rulesAgreed, setRulesAgreed] = useState(false);
+  
   const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
+  const navigate = useNavigate();
+
+  // Check Session Storage on Mount
+  useEffect(() => {
+    const hasAcceptedRules = sessionStorage.getItem('zquab_rules_accepted');
+    if (!hasAcceptedRules) {
+      setShowRulesModal(true);
+    }
+  }, []);
+
+  const handleAcceptRules = () => {
+    if (!rulesAgreed) return;
+    sessionStorage.setItem('zquab_rules_accepted', 'true');
+    setShowRulesModal(false);
+  };
 
   const clearPhotoRequestTimeout = () => {
     if (photoRequestTimeoutRef.current !== null) {
@@ -47,9 +71,6 @@ export default function ChatPage() {
           return;
         }
 
-        // The backend passes this through opaquely as raw JSON text, so a
-        // plain 2-letter code arrives wrapped in quotes (e.g. `"IN"`) —
-        // strip them before checking/displaying.
         const normalized = partnerLocation.trim().replace(/^"|"$/g, '');
         if (/^[A-Za-z]{2}$/.test(normalized)) {
           setPartnerCountry({ name: normalized.toUpperCase(), code: normalized.toUpperCase() });
@@ -98,14 +119,6 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    chatClient.start().catch((error) => {
-      setSystemMessages((prev) => [...prev, { id: 'sys-error', text: 'Unable to start chat client.' }]);
-      console.error(error);
-    });
-
-    // Best-effort: drop the stale matchmaking-queue entry if the tab is
-    // closed/refreshed outright (unmount cleanup below won't run in time
-    // for that case since the page is already gone).
     const handleBeforeUnload = () => {
       chatClient.leaveQueueSilently(true);
     };
@@ -120,8 +133,18 @@ export default function ChatPage() {
   }, [chatClient]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, [messages, status, systemMessages]);
+
+  const handleStartChat = () => {
+    setStatus('searching');
+    chatClient.start().catch((error) => {
+      setSystemMessages((prev) => [...prev, { id: 'sys-error', text: 'Unable to start chat client.' }]);
+      console.error(error);
+    });
+  };
 
   const handleSend = (text: string) => {
     if (status !== 'connected') return;
@@ -142,12 +165,13 @@ export default function ChatPage() {
     clearPhotoRequestTimeout();
   };
 
-  // Grey out the "ask for photo" button for 30s after a request is sent so
-  // the stranger has time to respond, then re-enable it regardless of
-  // whether they answered — requests aren't capped per room anymore.
   const PHOTO_REQUEST_TIMEOUT_MS = 30_000;
 
   const handleRequestPhoto = () => {
+    if (user?.is_guest) {
+      alert("You need to create a full account to request and send photos!");
+      return;
+    }
     setPhotoRequestBusy(true);
     chatClient.requestPhoto()
       .then(() => {
@@ -180,9 +204,6 @@ export default function ChatPage() {
     if (!file) return;
     chatClient.sharePhoto(file)
       .then(() => {
-        // The backend only delivers `photo_ready` (with the presigned URL) to
-        // the requester — the uploader never gets it back over the socket.
-        // Show a local preview of what was sent so the sender can see it too.
         const previewUrl = URL.createObjectURL(file);
         setMessages((prev) => [...prev, {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -196,18 +217,129 @@ export default function ChatPage() {
       });
   };
 
+  const handleLeaveConfirm = () => {
+    navigate('/');
+  };
+
   return (
-    // UX FIX 1: Removed mobile padding, enforced edge-to-edge layout, locked dynamic viewport height
-    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-4 md:p-4 h-[calc(100dvh-64px)] overflow-hidden">
+    <div className="flex-1 w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 min-h-0 overflow-hidden">
       
-      {/* Left: Chat Window */}
-      {/* UX FIX 2: Removed border radius and borders on mobile for a native app feel */}
-      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-transparent md:glass rounded-none md:rounded-2xl border-0 md:border md:border-[var(--border-color)] overflow-hidden min-h-0 relative">
+      {/* Rules & Safety Modal */}
+      <AnimatePresence>
+        {showRulesModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              
+              <h3 className="text-2xl md:text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
+              <p className="text-[var(--text-muted)] text-center text-sm mb-6">Please read and accept before connecting.</p>
+              
+              <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
+                  <HeartHandshake className="w-5 h-5 text-[#3B82F6] mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-[var(--text-main)] text-sm mb-1">Treat Strangers with Respect</h4>
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">No bullying, racism, harassment, or abusive language. We have a zero-tolerance policy for abuse.</p>
+                  </div>
+                </div>
+                
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
+                  <ImageMinus className="w-5 h-5 text-[#3B82F6] mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-[var(--text-main)] text-sm mb-1">Strict Photo Policy</h4>
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">You cannot send photos directly. You can only request them. To send a photo, the stranger must request it from you first.</p>
+                  </div>
+                </div>
+                
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
+                  <UserX className="w-5 h-5 text-[#3B82F6] mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-[var(--text-main)] text-sm mb-1">Protect Your Privacy</h4>
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">Do not share sensitive personal details, social media handles, or contact information with strangers.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Consent Checkbox */}
+              <label 
+                onClick={() => setRulesAgreed(!rulesAgreed)} 
+                className="flex items-center gap-3 cursor-pointer mb-6 p-2 rounded-lg hover:bg-[var(--border-color)]/50 transition-colors group"
+              >
+                <div className={`w-6 h-6 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${rulesAgreed ? 'bg-[#3B82F6] border-[#3B82F6]' : 'border-[var(--text-muted)] bg-[var(--background)] group-hover:border-[#3B82F6]'}`}>
+                  {rulesAgreed && <Check className="w-4 h-4 text-white" />}
+                </div>
+                <span className="text-sm text-[var(--text-muted)] leading-tight select-none">
+                  I agree to the Community Rules and promise to treat others with respect.
+                </span>
+              </label>
+
+              <button 
+                onClick={handleAcceptRules}
+                disabled={!rulesAgreed}
+                className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold transition-all flex-shrink-0 shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none hover:bg-blue-600 disabled:hover:bg-[#3B82F6] active:scale-95 disabled:active:scale-100"
+              >
+                I Understand & Agree
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] rounded-none md:rounded-2xl border-0 md:border md:border-[var(--border-color)] overflow-hidden min-h-0 relative">
         
-        {/* Chat Header (Responsive) */}
+        {/* Leave Chat Warning Modal */}
+        <AnimatePresence>
+          {showLeaveConfirm && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center"
+              >
+                <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-red-500/20">
+                  <LogOut className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Leave Chat?</h3>
+                <p className="text-[var(--text-muted)] mb-8 leading-relaxed">
+                  Are you sure you want to leave? This chat will be gone forever and cannot be recovered.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button 
+                    onClick={handleLeaveConfirm}
+                    className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors"
+                  >
+                    Yes, Leave Chat
+                  </button>
+                  <button 
+                    onClick={() => setShowLeaveConfirm(false)}
+                    className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Chat Header */}
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
           
-          {/* Desktop Title */}
           <div className="hidden md:flex items-center gap-3">
             <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
             <div className="flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--background)]/60 px-3 py-1 text-sm text-[var(--text-muted)]">
@@ -222,14 +354,13 @@ export default function ChatPage() {
             </div>
           </div>
           
-          {/* Mobile Status Indicator */}
           <div className="md:hidden flex items-center gap-2">
+            {status === 'idle' && <><div className="w-2.5 h-2.5 rounded-full bg-zinc-400" /> <span className="text-sm font-semibold text-zinc-400">Waiting</span></>}
             {status === 'searching' && <><div className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] animate-ping" /> <span className="text-sm font-semibold text-[#3B82F6]">Searching</span></>}
             {status === 'connected' && <><div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22C55E]" /> <span className="text-sm font-semibold text-green-500">Connected</span></>}
             {status === 'disconnected' && <><div className="w-2.5 h-2.5 rounded-full bg-red-500" /> <span className="text-sm font-semibold text-red-500">Disconnected</span></>}
           </div>
 
-          {/* UX FIX 3: Mobile Integrated Controls */}
           <div className="flex md:hidden items-center gap-1.5">
             <div className="flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--background)]/70 px-2.5 py-1 text-xs text-[var(--text-muted)]">
               {userCountry?.code ? (
@@ -241,12 +372,15 @@ export default function ChatPage() {
                 <span>{userCountry?.name || 'Detecting location...'}</span>
               )}
             </div>
-            <button 
-              onClick={handleNext}
-              className="bg-[#3B82F6] hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-colors active:scale-95"
-            >
-              <UserPlus className="w-4 h-4" /> Next
-            </button>
+            
+            {status !== 'idle' && (
+              <button 
+                onClick={handleNext}
+                className="bg-[#3B82F6] hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-colors active:scale-95"
+              >
+                <UserPlus className="w-4 h-4" /> Next
+              </button>
+            )}
             
             <div className="relative">
               <button 
@@ -256,7 +390,6 @@ export default function ChatPage() {
                 <MoreVertical className="w-5 h-5" />
               </button>
 
-              {/* Mobile Dropdown Menu */}
               <AnimatePresence>
                 {showMobileMenu && (
                   <motion.div
@@ -266,16 +399,12 @@ export default function ChatPage() {
                     transition={{ duration: 0.15 }}
                     className="absolute right-0 top-full mt-2 w-48 bg-[var(--card)] rounded-xl border border-[var(--border-color)] shadow-xl overflow-hidden py-1 z-50 origin-top-right"
                   >
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--text-main)] hover:bg-red-500/10 hover:text-red-500 transition-colors">
-                      <Flag className="w-4 h-4" /> Report
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--text-main)] hover:bg-red-500/10 hover:text-red-500 transition-colors">
-                      <ShieldBan className="w-4 h-4" /> Block
-                    </button>
-                    <div className="h-px bg-[var(--border-color)] my-1" />
-                    <Link to="/" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--border-color)] transition-colors">
+                    <button 
+                      onClick={() => { setShowMobileMenu(false); setShowLeaveConfirm(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-500/10 transition-colors"
+                    >
                       <LogOut className="w-4 h-4" /> Leave Chat
-                    </Link>
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -283,12 +412,23 @@ export default function ChatPage() {
           </div>
         </div>
         
-        {/* Messages Area */}
-        {/* UX FIX 4: overscroll-contain explicitly stops the mobile browser pull-to-refresh jerk */}
+        {/* Messages / Status Area */}
         <div 
-          className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-[var(--background)]/30 min-h-0"
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-[var(--background)]/30 min-h-0 relative"
           onClick={() => setShowMobileMenu(false)}
         >
+          {status === 'idle' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <button
+                onClick={handleStartChat}
+                className="bg-[#3B82F6] hover:bg-blue-600 text-white px-10 py-4 rounded-full font-bold text-lg transition-all duration-300 hover:scale-[1.02] active:scale-95 shadow-xl shadow-blue-500/20"
+              >
+                Start Chatting
+              </button>
+            </div>
+          )}
+
           {status === 'searching' && (
             <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] gap-4">
               <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
@@ -296,7 +436,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {messages.map(msg => (
+          {status !== 'idle' && messages.map(msg => (
             msg.isSystem ? (
               <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">
                 {msg.text}
@@ -305,10 +445,8 @@ export default function ChatPage() {
               <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
             )
           ))}
-          <div ref={messagesEndRef} />
         </div>
 
-        {/* Hidden file input used to fulfil an accepted incoming photo request */}
         <input
           ref={photoFileInputRef}
           type="file"
@@ -317,14 +455,13 @@ export default function ChatPage() {
           onChange={handlePhotoFileSelected}
         />
 
-        {/* Incoming photo request prompt */}
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-xl border border-[var(--border-color)] shadow-xl p-4 z-30"
+              className="absolute bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-xl border border-[var(--border-color)] shadow-xl p-4 z-30"
             >
               <p className="text-sm font-medium text-[var(--text-main)] mb-3 flex items-center gap-2">
                 <Image className="w-4 h-4 text-[#3B82F6]" /> Stranger wants to see a photo of you.
@@ -347,19 +484,17 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        {/* Input Area */}
-        <div className="flex-shrink-0 z-10" onClick={() => setShowMobileMenu(false)}>
+        <div className="flex-shrink-0 z-10 w-full px-4 pb-4 md:px-0 md:pb-0" onClick={() => setShowMobileMenu(false)}>
           <ChatInput
             onSend={handleSend}
             disabled={status !== 'connected'}
             onRequestPhoto={handleRequestPhoto}
-            photoRequestDisabled={photoRequestBusy}
+            photoRequestDisabled={photoRequestBusy || status === 'idle'}
           />
         </div>
       </div>
 
-      {/* Right: Controls Sidebar (Desktop Only) */}
-      {/* UX FIX 5: Completely hidden on mobile breakpoints */}
+      {/* Right Sidebar (Desktop Only) */}
       <div className="hidden md:block w-80 h-full flex-shrink-0">
         <ConnectionCard status={status} onNext={handleNext} userCountry={userCountry} partnerCountry={partnerCountry} />
       </div>

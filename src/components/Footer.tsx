@@ -40,7 +40,7 @@ export default function Footer() {
               <Link to="/safety" className="hover:text-[#3B82F6] transition-colors">Safety</Link>
               <Link to="/privacy" className="hover:text-[#3B82F6] transition-colors">Privacy</Link>
               <Link to="/terms" className="hover:text-[#3B82F6] transition-colors">Terms</Link>
-              <a href="mailto:hello@zquab.com" className="hover:text-[#3B82F6] transition-colors">Contact</a>
+              <Link to="/contact" className="hover:text-[#3B82F6] transition-colors">Contact</Link>
             </div>
             
           </div>

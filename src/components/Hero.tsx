@@ -1,10 +1,30 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, MessageSquare } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowRight, MessageSquare, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { useAuth } from '../context/AuthContext';
 
 export default function Hero() {
-  const { theme } = useTheme(); // Hook directly into our theme state
+  const { theme } = useTheme(); 
+  
+  // Bring in Auth and Routing
+  const { loginAsGuest } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  const handleStartChatting = async () => {
+    setLoading(true);
+    try {
+      await loginAsGuest();
+      navigate('/home'); // Routes to the dashboard after minting the guest token
+    } catch (err) {
+      console.error('Failed to authenticate:', err);
+      alert('Failed to connect. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <section className="relative pt-8 pb-16 w-full">
@@ -52,19 +72,22 @@ export default function Hero() {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                <Link 
-                  to="/chat"
-                  className="group flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-200 shadow-md shadow-blue-500/20 active:scale-[0.98]"
+                
+                {/* Changed from Link to Button to handle Auth */}
+                <button 
+                  onClick={handleStartChatting}
+                  disabled={loading}
+                  className="group flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-200 shadow-md shadow-blue-500/20 active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
                 >
-                  Start Chatting
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Link>
+                  {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+                  {loading ? 'Connecting...' : 'Start Chatting'}
+                  {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                </button>
+
                 <button className="flex items-center justify-center gap-2 bg-[var(--card)]/80 backdrop-blur-sm hover:bg-[var(--card)] text-[var(--text-main)] border border-[var(--border-color)] px-8 py-4 rounded-full font-semibold text-lg transition-all duration-200 active:scale-[0.98]">
                   View Features
                 </button>
               </div>
-
-              {/* <OnlineCounter /> */}
             </motion.div>
 
             {/* Right Hero Visual - The Chat Mockup */}
@@ -136,7 +159,6 @@ export default function Hero() {
                 </div>
               </div>
             </motion.div>
-
           </div>
         </div>
       </div>

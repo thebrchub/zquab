@@ -2,7 +2,7 @@ import ReactCountryFlag from 'react-country-flag';
 import { UserPlus, Flag, ShieldBan, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-type Status = 'searching' | 'connected' | 'disconnected';
+type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
 interface Props {
   status: Status;
@@ -84,7 +84,7 @@ export default function ConnectionCard({ status, onNext, userCountry, partnerCou
           Next Stranger
         </button>
         
-        <div className="grid grid-cols-2 gap-3">
+        {/* <div className="grid grid-cols-2 gap-3">
           <button className="flex items-center justify-center gap-2 glass hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 text-[var(--text-muted)] py-3 rounded-xl font-medium transition-all">
             <Flag className="w-4 h-4" />
             Report
@@ -93,7 +93,7 @@ export default function ConnectionCard({ status, onNext, userCountry, partnerCou
             <ShieldBan className="w-4 h-4" />
             Block
           </button>
-        </div>
+        </div> */}
         
         <Link 
           to="/"

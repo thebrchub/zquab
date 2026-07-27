@@ -1,9 +1,9 @@
 import Hero from '../components/Hero';
 import FeaturesGrid from '../components/FeaturesGrid';
 import HowItWorks from '../components/HowItWorks';
-import SafetySection from '../components/SafetySection';
 
 import CTAFooter from '../components/CTAFooter';
+import PhilosophySection from '../components/PhilosophySection';
 
 
 export default function LandingPage() {
@@ -12,7 +12,7 @@ export default function LandingPage() {
       <Hero />
       <FeaturesGrid />
       <HowItWorks />
-      <SafetySection />
+      <PhilosophySection />
       <CTAFooter/>
       
     </div>

@@ -8,4 +8,19 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
+  server: {
+    proxy: {
+      // Proxy HTTP API requests to your deployed backend
+      '/api': {
+        target: 'https://api.zquab.com',
+        changeOrigin: true,
+      },
+      // Proxy WebSocket connections to your deployed backend
+      '/ws': {
+        target: 'wss://api.zquab.com',
+        changeOrigin: true,
+        ws: true,
+      }
+    }
+  }
 })

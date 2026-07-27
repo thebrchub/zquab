@@ -1,38 +1,57 @@
-import { motion } from 'framer-motion';
-import { twMerge } from 'tailwind-merge';
+
 
 interface Props {
-  message: string;
+  // Supports both 'message' (Anonymous Chat) and 'content' (DM Chat)
+  message?: string;
+  content?: string; 
   isOwn: boolean;
-  imageUrl?: string;
+  status?: 'sent' | 'delivered' | 'read';
+  time?: string;
+  imageUrl?: string; // For the anonymous photo sharing
 }
 
-export default function MessageBubble({ message, isOwn, imageUrl }: Props) {
+export default function MessageBubble({ message, content, isOwn, status, time, imageUrl }: Props) {
+  // Gracefully fallback to whichever text prop was passed
+  const displayText = content || message || '';
+  const formattedTime = time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      className={twMerge("flex w-full", isOwn ? "justify-end" : "justify-start")}
-    >
-      <div className={twMerge(
-        "max-w-[75%] px-4 py-3 rounded-2xl text-sm md:text-base leading-relaxed shadow-sm",
-        isOwn
-          ? "bg-[#3B82F6] text-white rounded-br-sm"
-          : "glass text-[var(--text-main)] rounded-bl-sm border border-[var(--border-color)]"
-      )}>
-        {imageUrl ? (
-          <div className="flex flex-col gap-2">
-            <img
-              src={imageUrl}
-              alt="Shared photo"
-              className="max-w-full max-h-64 rounded-xl object-contain"
-            />
-            {message && <span>{message}</span>}
+    <div className={`flex w-full mb-4 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+      <div 
+        className={`max-w-[75%] md:max-w-[65%] rounded-2xl px-4 py-2.5 flex flex-col relative
+          ${isOwn 
+            ? 'bg-[#3B82F6] text-white rounded-tr-sm' 
+            : 'bg-[var(--card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-tl-sm'
+          }`}
+      >
+        {/* Render Image if one was sent */}
+        {imageUrl && (
+          <img 
+            src={imageUrl} 
+            alt="Shared photo" 
+            className="max-w-full rounded-xl mb-2 object-cover border border-white/10" 
+          />
+        )}
+        
+        {/* Render Text if there is any */}
+        {displayText && (
+          <p className="text-sm md:text-base leading-relaxed break-words">{displayText}</p>
+        )}
+        
+        {/* Render Time & Status if provided (used in DM Chat) */}
+        {formattedTime && (
+          <div className={`flex items-center gap-1.5 mt-1 text-[10px] uppercase font-bold self-end
+            ${isOwn ? 'text-blue-100' : 'text-[var(--text-muted)]'}
+          `}>
+            <span>{formattedTime}</span>
+            {isOwn && status && (
+              <span className="tracking-wider opacity-80">
+                • {status}
+              </span>
+            )}
           </div>
-        ) : (
-          message
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

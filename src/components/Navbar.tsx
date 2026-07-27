@@ -1,10 +1,30 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
-import { Home } from 'lucide-react';
+import { Home, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const location = useLocation();
   const isChatPage = location.pathname === '/chat';
+  
+  // Bring in Auth and Routing
+  const { loginAsGuest } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  const handleStartChatting = async () => {
+    setLoading(true);
+    try {
+      await loginAsGuest();
+      navigate('/chat'); // <-- FIX: Route to anonymous chat, not the dashboard!
+    } catch (err) {
+      console.error('Failed to authenticate:', err);
+      alert('Failed to connect. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <nav className="sticky top-0 z-50 glass border-b">
@@ -16,7 +36,7 @@ export default function Navbar() {
             to="/" 
             className={`flex items-center gap-2.5 transition-all duration-300 z-10 ${
               isChatPage 
-                ? "absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0" // Centered on mobile, left on desktop
+                ? "absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0" 
                 : "" 
             }`}
           >
@@ -38,7 +58,7 @@ export default function Navbar() {
             <ThemeToggle />
             
             {isChatPage ? (
-              // On Chat Page: Home Button (Hidden on Mobile/Tablet, visible on Desktop)
+              // On Chat Page: Home Button
               <Link
                 to="/"
                 className="hidden md:flex items-center gap-2 glass hover:bg-[var(--border-color)] text-[var(--text-main)] px-5 py-2 rounded-full font-medium transition-all duration-200 transform hover:scale-105 active:scale-95"
@@ -47,13 +67,15 @@ export default function Navbar() {
                 Home
               </Link>
             ) : (
-              // On Other Pages: Start Chat Button (Visible everywhere)
-              <Link
-                to="/chat"
-                className="bg-[#3B82F6] hover:bg-blue-600 text-white px-5 py-2 rounded-full font-medium transition-all duration-200 transform hover:scale-105 active:scale-95"
+              // On Other Pages: Start Chat Button connected to Backend
+              <button
+                onClick={handleStartChatting}
+                disabled={loading}
+                className="flex items-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white px-5 py-2 rounded-full font-medium transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:opacity-70 disabled:hover:scale-100"
               >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Start Chat
-              </Link>
+              </button>
             )}
           </div>
         </div>

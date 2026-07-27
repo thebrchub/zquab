@@ -1,12 +1,12 @@
-import { Zap, Ghost, MessageSquare, Cpu } from 'lucide-react';
+import { Zap, Fingerprint, Waves, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 
-const safetyFeatures = [
+const philosophyFeatures = [
   {
-    Icon: Cpu,
-    title: "Algorithmic Matching",
-    desc: "Our intelligent routing engine pairs you dynamically, keeping the network balanced and engaging without manual intervention.",
+    Icon: Zap,
+    title: "Instant Immersion",
+    desc: "Skip the setup and drop directly into an active conversation. The engine is optimized to connect you with someone new in milliseconds.",
     color: "text-blue-600 dark:text-blue-400",
     bg: "bg-blue-500/10",
     ring: "ring-blue-500/20",
@@ -14,65 +14,92 @@ const safetyFeatures = [
     borderHover: "hover:border-blue-500/50",
   },
   {
-    Icon: Ghost,
-    title: "Absolute Anonymity",
-    desc: "No accounts, no persistent identities, no trace. Once you skip a chat, you vanish completely into the void.",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-500/10",
-    ring: "ring-emerald-500/20",
-    glow: "from-emerald-500/20",
-    borderHover: "hover:border-emerald-500/50",
+    Icon: Fingerprint,
+    title: "Identity Optional",
+    desc: "Engage strictly on your own terms. We care about the exchange of ideas, not follower counts, public timelines, or curated personas.",
+    color: "text-zinc-600 dark:text-zinc-300",
+    bg: "bg-zinc-500/10",
+    ring: "ring-zinc-500/20",
+    glow: "from-zinc-500/20",
+    borderHover: "hover:border-zinc-500/50",
   },
   {
-    Icon: MessageSquare,
-    title: "Unfiltered Speech",
-    desc: "Say exactly what you mean. We champion true freedom of expression by staying completely out of your conversations.",
-    color: "text-purple-600 dark:text-purple-400",
-    bg: "bg-purple-500/10",
-    ring: "ring-purple-500/20",
-    glow: "from-purple-500/20",
-    borderHover: "hover:border-purple-500/50",
+    Icon: Waves,
+    title: "Dynamic Pairing",
+    desc: "A seamless conversational flow. Our routing system works quietly in the background to match you with your next connection the moment you are ready.",
+    color: "text-indigo-600 dark:text-indigo-400",
+    bg: "bg-indigo-500/10",
+    ring: "ring-indigo-500/20",
+    glow: "from-indigo-500/20",
+    borderHover: "hover:border-indigo-500/50",
   }
 ];
 
-export default function SafetySection() {
+export default function PhilosophySection() {
   return (
-    <section className="py-24 relative w-full bg-[var(--background)] z-20 border-none">
+    <section className="py-24 md:py-32 relative w-full bg-[var(--background)] z-20 border-none">
       <div className="mx-4 md:mx-8 lg:mx-12">
         
         {/* Header Section */}
-        <div className="text-center mb-20 flex flex-col items-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-400 font-bold text-xs uppercase tracking-widest mb-6">
-            <Zap className="w-4 h-4" />
-            AI-Powered Ecosystem
-          </div>
-          
-          <h2 className="text-4xl md:text-5xl font-extrabold mb-6 text-[var(--text-main)] tracking-tight">
-            True freedom. <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600">Zero censorship.</span>
-          </h2>
-          
-          <p className="text-lg md:text-xl text-[var(--text-muted)] max-w-2xl mx-auto mb-10 leading-relaxed">
-            We believe in the raw magic of unfiltered human connection. By removing accounts, logins, and manual moderation, we've built an ecosystem driven entirely by smart algorithms and absolute anonymity.
-          </p>
-
-          <Link 
-            to="/about" 
-            className="group inline-flex items-center gap-2 text-sm font-bold tracking-wide uppercase text-[var(--text-main)] hover:text-[#3B82F6] transition-colors"
+        <div className="text-center mb-24 flex flex-col items-center">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)] border border-[var(--border-color)] shadow-sm text-[var(--text-main)] font-bold text-xs uppercase tracking-widest mb-8"
           >
-            Learn how it works 
-            <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
-          </Link>
+            <Sparkles className="w-4 h-4 text-[#3B82F6]" />
+            The zQuab Philosophy
+          </motion.div>
+          
+          <motion.h2 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-8 text-[var(--text-main)] tracking-tight leading-[1.1] max-w-4xl"
+          >
+            Engineered for dialogue. <br className="hidden md:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3B82F6] to-indigo-500">
+              Stripped of the noise.
+            </span>
+          </motion.h2>
+          
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2 }}
+            className="text-lg md:text-xl text-[var(--text-muted)] max-w-2xl mx-auto mb-12 leading-relaxed"
+          >
+            Modern platforms turned talking into a performance. We’re bringing it back to reality. By removing public metrics and static profiles, we’ve created a minimalist environment focused entirely on authentic, one-to-one human interaction.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
+          >
+            <Link 
+              to="/about" 
+              className="group inline-flex items-center gap-2 text-sm font-bold tracking-wide uppercase text-[var(--text-main)] hover:text-[#3B82F6] transition-colors"
+            >
+              Discover how it works
+              <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
+            </Link>
+          </motion.div>
         </div>
 
         {/* Premium Complex Card Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 xl:gap-8">
-          {safetyFeatures.map((feat, i) => (
+          {philosophyFeatures.map((feat, i) => (
             <motion.div 
               key={i}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.15, duration: 0.5 }}
+              transition={{ delay: i * 0.15 + 0.2, duration: 0.5 }}
               className="relative group"
             >
               {/* Outer Glow Effect on Hover */}
