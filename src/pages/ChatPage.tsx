@@ -10,8 +10,57 @@ import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
-
 type SystemMessage = { id: string; text: string };
+
+// 🛠️ UTILITY: Compress and convert ANY image to .webp
+const compressImageToWebP = (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.src = URL.createObjectURL(file);
+    
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+      
+      // Maximum dimensions to prevent massive uploads
+      const MAX_SIZE = 1200;
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        if (width > height) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        } else {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject('Canvas context not supported');
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Export as webp at 80% quality
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            // Give it a new name with the .webp extension
+            const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+            const webpFile = new File([blob], newName, { type: 'image/webp' });
+            resolve(webpFile);
+          } else {
+            reject('Blob creation failed');
+          }
+        },
+        'image/webp',
+        0.8 
+      );
+    };
+    img.onerror = () => reject('Image load failed');
+  });
+};
+
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -21,7 +70,6 @@ export default function ChatPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   
-  // Rules Modal State
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [rulesAgreed, setRulesAgreed] = useState(false);
   
@@ -35,7 +83,6 @@ export default function ChatPage() {
   const photoRequestTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
-  // Check Session Storage on Mount
   useEffect(() => {
     const hasAcceptedRules = sessionStorage.getItem('zquab_rules_accepted');
     if (!hasAcceptedRules) {
@@ -198,23 +245,33 @@ export default function ChatPage() {
     photoFileInputRef.current?.click();
   };
 
-  const handlePhotoFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 🛠️ UPDATED: Now converts raw images to WebP before sharing
+  const handlePhotoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = '';
+    e.target.value = ''; // Reset input
     if (!file) return;
-    chatClient.sharePhoto(file)
-      .then(() => {
-        const previewUrl = URL.createObjectURL(file);
-        setMessages((prev) => [...prev, {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          text: '',
-          isOwn: true,
-          imageUrl: previewUrl,
-        }]);
-      })
-      .catch((error) => {
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to send photo: ${error}` }]);
-      });
+
+    try {
+      // Show loading system message
+      setSystemMessages((prev) => [...prev, { id: `sys-compressing-${Date.now()}`, text: 'Optimizing photo...' }]);
+      
+      // Convert to WebP
+      const webpFile = await compressImageToWebP(file);
+      
+      // Send the compressed WebP to the backend
+      await chatClient.sharePhoto(webpFile);
+      
+      // Render preview on UI
+      const previewUrl = URL.createObjectURL(webpFile);
+      setMessages((prev) => [...prev, {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        text: '',
+        isOwn: true,
+        imageUrl: previewUrl,
+      }]);
+    } catch (error) {
+      setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: `Failed to process/send photo: ${error}` }]);
+    }
   };
 
   const handleLeaveConfirm = () => {
@@ -450,7 +507,7 @@ export default function ChatPage() {
         <input
           ref={photoFileInputRef}
           type="file"
-          accept="image/jpeg,image/webp,image/avif,image/png"
+          accept="image/jpeg,image/webp,image/avif,image/png,image/heic"
           className="hidden"
           onChange={handlePhotoFileSelected}
         />
