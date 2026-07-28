@@ -15,7 +15,8 @@ interface AuthContextType {
   isLoading: boolean;
   loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
-  devMockLogin: () => void; // <-- NEW: Developer tool bypass
+  devMockLogin: () => void; 
+  refreshSession: () => Promise<void>; // 🛠️ NEW: Expose this to your apps
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -23,6 +24,25 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 🛠️ NEW: Extracted this so it can be called from anywhere
+  const refreshSession = async () => {
+    try {
+      const response = await apiClient.get('/users/me');
+      const userData = response.data;
+      
+      setUser({
+        user_id: userData.id,
+        is_guest: false,
+        username: userData.username,
+        name: userData.name,
+        avatar_url: userData.avatar_url,
+      });
+    } catch (error: any) {
+      console.log('No active full user session found on load.');
+      setUser(null);
+    }
+  };
 
   const loginAsGuest = async () => {
     try {
@@ -43,7 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🛠️ DEV TOOL: Injects a fake fully-registered user into the state
   const devMockLogin = () => {
     setUser({
       user_id: 'dev_mock_999',
@@ -55,31 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const response = await apiClient.get('/users/me');
-        const userData = response.data;
-        
-        setUser({
-          user_id: userData.id,
-          is_guest: false,
-          username: userData.username,
-          name: userData.name,
-          avatar_url: userData.avatar_url,
-        });
-      } catch (error: any) {
-        console.log('No active full user session found on load.');
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkSession();
+    refreshSession().finally(() => setIsLoading(false));
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, loginAsGuest, logout, devMockLogin }}>
+    <AuthContext.Provider value={{ user, isLoading, loginAsGuest, logout, devMockLogin, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

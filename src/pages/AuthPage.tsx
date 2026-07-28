@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 const GOOGLE_CLIENT_ID = "1024944888869-9356nb9mq73ki2u2tch6ebtaoic7q3bg.apps.googleusercontent.com";
@@ -8,26 +9,27 @@ const GOOGLE_CLIENT_ID = "1024944888869-9356nb9mq73ki2u2tch6ebtaoic7q3bg.apps.go
 function AuthForm() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { refreshSession } = useAuth(); // 🛠️ Add this
 
   const handleSuccess = async (credentialResponse: any) => {
     setIsLoading(true);
     try {
       const response = await fetch('https://api.zquab.com/api/v1/auth/google', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include', 
-        // 🛠️ THE FIX: Sending the token exactly as the Go backend struct expects it
         body: JSON.stringify({ google_id_token: credentialResponse.credential }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Backend authentication failed');
+        throw new Error('Backend authentication failed');
       }
 
-      navigate('/home');
+      // 🛠️ Fetch the newly created profile into React's global state!
+      await refreshSession();
+
+      // Now App.tsx knows everything and will route you to onboarding automatically
+      navigate('/home'); 
 
     } catch (error: any) {
       console.error(error);

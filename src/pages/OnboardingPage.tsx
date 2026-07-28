@@ -2,24 +2,24 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, AlertCircle, Loader2, ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiClient } from '../api/client'; // 🛠️ Import your API client
+import { useAuth } from '../context/AuthContext'; // 🛠️ Import useAuth
 
 const GENDER_OPTIONS = ['Prefer not to say', 'Male', 'Female', 'Other'];
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
+  const { refreshSession } = useAuth(); // 🛠️ Grab the new function
   const [isLoading, setIsLoading] = useState(false);
   
-  // Form State
   const [username, setUsername] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('Prefer not to say');
   const [bio, setBio] = useState('');
 
-  // Custom Dropdown State
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown if clicked outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -34,13 +34,28 @@ export default function OnboardingPage() {
     e.preventDefault();
     setIsLoading(true);
     
-    // TODO: Call PUT /api/v1/users/me with this data. 
-    // const data = { username, name: username, age: parseInt(age), gender, bio };
-    
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // 🛠️ 1. Send the data to the backend
+      await apiClient.put('/users/me', {
+        username: username,
+        name: username, // Temporarily mirroring username to name
+        bio: bio,
+        gender: gender,
+        // age isn't in your API spec, but you can pass it if Shivanand added it
+      });
+      
+      // 🛠️ 2. Force the AuthContext to fetch the newly saved username
+      await refreshSession();
+
+      // 🛠️ 3. Now it is safe to navigate; App.tsx knows you are fully onboarded!
       navigate('/home'); 
-    }, 1500);
+
+    } catch (error: any) {
+      console.error(error);
+      alert('Failed to save profile. That username might be taken!');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -73,7 +88,6 @@ export default function OnboardingPage() {
           className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 sm:p-8 shadow-2xl space-y-6"
         >
           
-          {/* Avatar Upload Placeholder */}
           <div className="flex flex-col items-center justify-center mb-6">
             <div className="relative group cursor-pointer">
               <div className="w-24 h-24 rounded-full bg-[var(--background)] border-2 border-dashed border-[var(--border-color)] flex items-center justify-center overflow-hidden group-hover:border-[#3B82F6] transition-colors">
@@ -86,7 +100,6 @@ export default function OnboardingPage() {
             <span className="text-xs font-bold text-[var(--text-muted)] mt-3">Upload Profile Picture</span>
           </div>
 
-          {/* Username - With Permanent Warning */}
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-[var(--text-main)] ml-1 flex justify-between items-end">
               Username *
@@ -113,10 +126,8 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          {/* Age and Gender Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             
-            {/* Optional Age Block */}
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-[var(--text-main)] ml-1">
                 Age <span className="text-[var(--text-muted)] font-normal text-xs"></span>
@@ -132,7 +143,6 @@ export default function OnboardingPage() {
               />
             </div>
 
-            {/* Custom UI Gender Dropdown */}
             <div className="space-y-1.5" ref={dropdownRef}>
               <label className="text-sm font-bold text-[var(--text-main)] ml-1">Gender</label>
               <div className="relative">
@@ -147,7 +157,6 @@ export default function OnboardingPage() {
                   <ChevronDown className={`w-5 h-5 text-[var(--text-muted)] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* Dropdown Menu */}
                 <AnimatePresence>
                   {isDropdownOpen && (
                     <motion.div
@@ -179,7 +188,6 @@ export default function OnboardingPage() {
             
           </div>
 
-          {/* Bio - Moved down and expanded to a Textarea */}
           <div className="space-y-1.5">
             <div className="flex justify-between items-baseline ml-1">
               <label className="text-sm font-bold text-[var(--text-main)]">Bio</label>
