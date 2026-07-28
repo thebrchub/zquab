@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
@@ -12,15 +12,14 @@ function AuthForm() {
   const handleSuccess = async (credentialResponse: any) => {
     setIsLoading(true);
     try {
-      // ⚠️ Notice we are now sending credentialResponse.credential (The ID Token) 
-      // instead of the access_token
       const response = await fetch('https://api.zquab.com/api/v1/auth/google', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include', 
-        body: JSON.stringify({ token: credentialResponse.credential }),
+        // 🛠️ THE FIX: Sending the token exactly as the Go backend struct expects it
+        body: JSON.stringify({ google_id_token: credentialResponse.credential }),
       });
 
       if (!response.ok) {
@@ -38,6 +37,32 @@ function AuthForm() {
     }
   };
 
+  const handleGuestLogin = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('https://api.zquab.com/api/v1/auth/guest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', 
+      });
+
+      if (!response.ok) {
+        throw new Error('Guest login failed');
+      }
+
+      // Automatically routes you to the inbox with fresh cookies
+      navigate('/home');
+
+    } catch (error: any) {
+      console.error(error);
+      alert(`Guest Login Failed: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-md z-10 flex flex-col">
       <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-8 sm:p-10 shadow-2xl w-full text-center relative z-10">
@@ -50,30 +75,49 @@ function AuthForm() {
           </p>
         </div>
 
-        {/* 🛠️ We replace the custom button with the official Google Login component */}
-        <div className="flex justify-center w-full relative min-h-[44px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center w-full py-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl">
-              <Loader2 className="w-6 h-6 animate-spin text-[#3B82F6]" />
-            </div>
-          ) : (
-            <GoogleLogin
-              onSuccess={handleSuccess}
-              onError={() => {
-                console.error('Google Login Failed');
-                alert('Google Login failed. Please try again.');
-              }}
-              useOneTap
-              theme="outline"
-              size="large"
-              shape="pill"
-              width="300"
-            />
-          )}
+        <div className="flex flex-col gap-4">
+          {/* Official Google Login Component */}
+          <div className="flex justify-center w-full relative min-h-[44px]">
+            {isLoading ? (
+              <div className="flex items-center justify-center w-full py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl">
+                <Loader2 className="w-6 h-6 animate-spin text-[#3B82F6]" />
+              </div>
+            ) : (
+              <GoogleLogin
+                onSuccess={handleSuccess}
+                onError={() => {
+                  console.error('Google Login Failed');
+                  alert('Google Login failed. Please try again.');
+                }}
+                useOneTap
+                theme="outline"
+                size="large"
+                shape="pill"
+                width="300"
+              />
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="relative flex items-center py-2">
+            <div className="flex-grow border-t border-[var(--border-color)]"></div>
+            <span className="flex-shrink-0 mx-4 text-[var(--text-muted)] text-sm font-medium">OR</span>
+            <div className="flex-grow border-t border-[var(--border-color)]"></div>
+          </div>
+
+          {/* Guest Login Button */}
+          <button
+            onClick={handleGuestLogin}
+            disabled={isLoading}
+            className="w-full py-3.5 bg-[var(--background)] hover:bg-[var(--border-color)] border border-[var(--border-color)] text-[var(--text-main)] rounded-full font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
+          >
+            <User className="w-5 h-5 text-[var(--text-muted)]" />
+            Continue as Guest
+          </button>
         </div>
         
-        <p className="text-xs text-[var(--text-muted)] mt-6">
-          By continuing, you agree to our <a href="/terms" className="underline hover:text-[var(--text-main)]">Terms of Service</a> and <a href="/privacy" className="underline hover:text-[var(--text-main)]">Privacy Policy</a>.
+        <p className="text-xs text-[var(--text-muted)] mt-8">
+          By continuing, you agree to our <a href="/terms" className="underline hover:text-[#3B82F6] transition-colors">Terms of Service</a> and <a href="/privacy" className="underline hover:text-[#3B82F6] transition-colors">Privacy Policy</a>.
         </p>
       </div>
     </div>
