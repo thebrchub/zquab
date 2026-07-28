@@ -35,29 +35,34 @@ export default function OnboardingPage() {
     setIsLoading(true);
     
     try {
-      // 🛠️ 1. Send the data to the backend
-      await apiClient.put('/users/me', {
+      // 🛠️ SWITCHED TO PATCH: Safer for partial updates and overlapping state
+      await apiClient.patch('/users/me', {
         username: username,
-        name: username, // Temporarily mirroring username to name
+        name: username, 
         bio: bio,
         gender: gender,
-        // age isn't in your API spec, but you can pass it if Shivanand added it
       });
       
-      // 🛠️ 2. Force the AuthContext to fetch the newly saved username
+      // Force the AuthContext to fetch the newly saved username
       await refreshSession();
 
-      // 🛠️ 3. Now it is safe to navigate; App.tsx knows you are fully onboarded!
+      // Now it is safe to navigate
       navigate('/home'); 
 
     } catch (error: any) {
       console.error(error);
-      alert('Failed to save profile. That username might be taken!');
+      
+      // 🛠️ Handle the 409 Conflict explicitly
+      if (error.response?.status === 409) {
+        alert("That username is either already taken, or your profile is already permanently set up! Try refreshing the page.");
+      } else {
+        alert("Failed to save profile. Please try again.");
+      }
+      
     } finally {
       setIsLoading(false);
     }
   };
-
   return (
     <div className="min-h-[100dvh] bg-[var(--background)] py-10 px-4 sm:px-6 flex justify-center">
       <div className="w-full max-w-lg z-10">
