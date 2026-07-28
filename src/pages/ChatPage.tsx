@@ -279,8 +279,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex-1 w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 min-h-0 overflow-hidden">
-      
+    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)]">
       {/* Rules & Safety Modal */}
       <AnimatePresence>
         {showRulesModal && (

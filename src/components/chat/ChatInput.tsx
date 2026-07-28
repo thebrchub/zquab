@@ -20,13 +20,13 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
     onSend(text);
     setText('');
     setShowDrawer(false);
-    setShowEmoji(false); // Close everything on send
+    setShowEmoji(false);
   };
 
   return (
     <div className="bg-[var(--card)] border-t border-[var(--border-color)] flex flex-col w-full relative z-20">
       
-      {/* 1. Floating Emoji Picker */}
+      {/* 1. Floating Emoji Picker (Absolute) */}
       <AnimatePresence>
         {showEmoji && (
           <motion.div 
@@ -37,7 +37,7 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
             className="absolute bottom-[calc(100%+8px)] left-2 sm:left-14 z-50 shadow-2xl rounded-2xl overflow-hidden border border-[var(--border-color)]"
           >
             <EmojiPicker 
-              theme={Theme.DARK} // Switch to Theme.LIGHT if zQuab is light mode
+              theme={Theme.DARK} 
               onEmojiClick={(emojiData) => setText((prev) => prev + emojiData.emoji)}
               searchDisabled={false}
               skinTonesDisabled
@@ -46,29 +46,29 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
         )}
       </AnimatePresence>
 
-      {/* 2. Sliding Bottom Drawer for Photo Request */}
+      {/* 2. Compact Floating Attachment Menu (Absolute) */}
       <AnimatePresence>
         {showDrawer && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden bg-[var(--background)] border-b border-[var(--border-color)]"
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-[calc(100%+8px)] left-2 z-50 w-80 bg-[var(--card)] border border-[var(--border-color)] shadow-2xl rounded-2xl overflow-hidden origin-bottom-left"
           >
-            <div className="p-4 sm:p-6">
-              
+            <div className="p-4">
               <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-[var(--text-main)]">Attachments</h4>
-                <button onClick={() => setShowDrawer(false)} className="text-[var(--text-muted)] hover:text-[var(--text-main)] bg-[var(--card)] p-1 rounded-full border border-[var(--border-color)]">
+                <h4 className="font-bold text-[var(--text-main)] text-sm uppercase tracking-wider">Attachments</h4>
+                <button onClick={() => setShowDrawer(false)} className="text-[var(--text-muted)] hover:text-red-500 bg-[var(--background)] p-1.5 rounded-full transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Info Box */}
-              <div className="flex items-start gap-3 mb-4 bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
-                <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+              {/* Compact Info Box */}
+              <div className="flex items-start gap-2.5 mb-4 bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
+                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-[var(--text-main)] leading-relaxed">
-                  For safety, direct photo uploads are disabled. You can only request photos. If you want to send one, the stranger must request it from you first!
+                  Direct uploads are disabled for safety. You must request a photo from the stranger first!
                 </p>
               </div>
 
@@ -80,9 +80,9 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
                   setShowDrawer(false);
                 }}
                 disabled={disabled || photoRequestDisabled}
-                className="w-full flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 active:scale-[0.98] text-white py-3.5 rounded-xl font-bold transition-all disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-blue-500/20"
+                className="w-full flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 active:scale-[0.98] text-white py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50 disabled:active:scale-100 shadow-md"
               >
-                <Image className="w-5 h-5" />
+                <Image className="w-4 h-4" />
                 Request a Photo
               </button>
             </div>
@@ -98,7 +98,7 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
           <button
             onClick={() => {
               setShowDrawer(!showDrawer);
-              setShowEmoji(false); // Close emojis if opening attachments
+              setShowEmoji(false); 
             }}
             disabled={disabled}
             className={`p-2.5 rounded-full transition-colors flex-shrink-0 ${
@@ -118,7 +118,7 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
           <button 
             onClick={() => {
               setShowEmoji(!showEmoji);
-              setShowDrawer(false); // Close attachments if opening emojis
+              setShowDrawer(false); 
             }}
             disabled={disabled}
             className={`p-1.5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
