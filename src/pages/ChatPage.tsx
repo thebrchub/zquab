@@ -22,7 +22,6 @@ const compressImageToWebP = (file: File): Promise<File> => {
       const canvas = document.createElement('canvas');
       let { width, height } = img;
       
-      // Maximum dimensions to prevent massive uploads
       const MAX_SIZE = 1200;
       if (width > MAX_SIZE || height > MAX_SIZE) {
         if (width > height) {
@@ -41,11 +40,9 @@ const compressImageToWebP = (file: File): Promise<File> => {
       
       ctx.drawImage(img, 0, 0, width, height);
       
-      // Export as webp at 80% quality
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            // Give it a new name with the .webp extension
             const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
             const webpFile = new File([blob], newName, { type: 'image/webp' });
             resolve(webpFile);
@@ -60,7 +57,6 @@ const compressImageToWebP = (file: File): Promise<File> => {
     img.onerror = () => reject('Image load failed');
   });
 };
-
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -245,23 +241,17 @@ export default function ChatPage() {
     photoFileInputRef.current?.click();
   };
 
-  // 🛠️ UPDATED: Now converts raw images to WebP before sharing
   const handlePhotoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ''; // Reset input
+    e.target.value = ''; 
     if (!file) return;
 
     try {
-      // Show loading system message
       setSystemMessages((prev) => [...prev, { id: `sys-compressing-${Date.now()}`, text: 'Optimizing photo...' }]);
       
-      // Convert to WebP
       const webpFile = await compressImageToWebP(file);
-      
-      // Send the compressed WebP to the backend
       await chatClient.sharePhoto(webpFile);
       
-      // Render preview on UI
       const previewUrl = URL.createObjectURL(webpFile);
       setMessages((prev) => [...prev, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -279,7 +269,9 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)]">
+    // 🛠️ OUTERMOST WRAPPER: Limits the height of the entire page to screen size minus navbar.
+    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)]">
+      
       {/* Rules & Safety Modal */}
       <AnimatePresence>
         {showRulesModal && (
@@ -287,7 +279,7 @@ export default function ChatPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
           >
             <motion.div 
               initial={{ scale: 0.95, y: 20, opacity: 0 }}
@@ -295,7 +287,6 @@ export default function ChatPage() {
               exit={{ scale: 0.95, y: 20, opacity: 0 }}
               className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]"
             >
-              
               <h3 className="text-2xl md:text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
               <p className="text-[var(--text-muted)] text-center text-sm mb-6">Please read and accept before connecting.</p>
               
@@ -325,7 +316,6 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Consent Checkbox */}
               <label 
                 onClick={() => setRulesAgreed(!rulesAgreed)} 
                 className="flex items-center gap-3 cursor-pointer mb-6 p-2 rounded-lg hover:bg-[var(--border-color)]/50 transition-colors group"
@@ -350,7 +340,8 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] rounded-none md:rounded-2xl border-0 md:border md:border-[var(--border-color)] overflow-hidden min-h-0 relative">
+      {/* 🛠️ MAIN CHAT COLUMN: Must be flex-1 so it shares space with the sidebar properly */}
+      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] rounded-none md:rounded-2xl border-0 md:border md:border-[var(--border-color)] overflow-hidden relative">
         
         {/* Leave Chat Warning Modal */}
         <AnimatePresence>
@@ -395,7 +386,6 @@ export default function ChatPage() {
 
         {/* Chat Header */}
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
-          
           <div className="hidden md:flex items-center gap-3">
             <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
             <div className="flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--background)]/60 px-3 py-1 text-sm text-[var(--text-muted)]">
@@ -550,7 +540,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Right Sidebar (Desktop Only) */}
+      {/* 🛠️ RIGHT SIDEBAR: Properly separated from the chat column now */}
       <div className="hidden md:block w-80 h-full flex-shrink-0">
         <ConnectionCard status={status} onNext={handleNext} userCountry={userCountry} partnerCountry={partnerCountry} />
       </div>
