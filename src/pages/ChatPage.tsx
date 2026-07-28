@@ -484,7 +484,7 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        <div className="flex-shrink-0 z-10 w-full px-4 pb-4 md:px-0 md:pb-0" onClick={() => setShowMobileMenu(false)}>
+        <div className="flex-shrink-0 z-20 w-full" onClick={() => setShowMobileMenu(false)}>
           <ChatInput
             onSend={handleSend}
             disabled={status !== 'connected'}

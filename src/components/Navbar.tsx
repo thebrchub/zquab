@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext';
 export default function Navbar() {
   const location = useLocation();
   const isChatPage = location.pathname === '/chat';
-
   
   const { user, loginAsGuest } = useAuth();
   const navigate = useNavigate();
@@ -16,7 +15,6 @@ export default function Navbar() {
 
   const isFullUser = user && !user.is_guest;
 
-  // Close mobile menu automatically when the route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
@@ -40,8 +38,6 @@ export default function Navbar() {
       setLoading(false);
     }
   };
-
-  // if (isAuthPage) return null; 
 
   return (
     <nav className="sticky top-0 z-50 glass border-b">
@@ -68,39 +64,36 @@ export default function Navbar() {
           {/* Right: Controls & Routing */}
           <div className="flex items-center gap-2 sm:gap-6 ml-auto z-10">
             
-            {/* Desktop Navigation Links */}
-            {!isChatPage && (
-              <div className="hidden md:flex items-center gap-8 mr-4">
-                <Link to="/about" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                  <Info className="w-5 h-5" /> About
-                </Link>
-                <Link to="/blog" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                  <BookOpen className="w-5 h-5" /> Blog
-                </Link>
+            {/* Desktop Navigation Links (Now visible on ALL pages) */}
+            <div className="hidden md:flex items-center gap-8 mr-4">
+              <Link to="/about" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
+                <Info className="w-5 h-5" /> About
+              </Link>
+              <Link to="/blog" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
+                <BookOpen className="w-5 h-5" /> Blog
+              </Link>
 
-                {/* Vertical Divider */}
-                <div className="h-8 w-px bg-[var(--border-color)] mx-1"></div>
+              <div className="h-8 w-px bg-[var(--border-color)] mx-1"></div>
 
-                {isFullUser ? (
-                  <>
-                    <Link to="/home" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                      <MessageSquare className="w-5 h-5" /> Inbox
-                    </Link>
-                    <Link to="/profile" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                      <User className="w-5 h-5" /> Profile
-                    </Link>
-                  </>
-                ) : (
-                  <Link to="/auth" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                    <LogIn className="w-5 h-5" /> Log in
+              {isFullUser ? (
+                <>
+                  <Link to="/home" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
+                    <MessageSquare className="w-5 h-5" /> Inbox
                   </Link>
-                )}
-              </div>
-            )}
+                  <Link to="/profile" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
+                    <User className="w-5 h-5" /> Profile
+                  </Link>
+                </>
+              ) : (
+                <Link to="/auth" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
+                  <LogIn className="w-5 h-5" /> Log in
+                </Link>
+              )}
+            </div>
 
             <ThemeToggle />
 
-            {/* Primary CTA Button (Desktop) */}
+            {/* Primary CTA Button */}
             {isChatPage ? (
               <Link
                 to="/"
@@ -121,21 +114,19 @@ export default function Navbar() {
               )
             )}
 
-            {/* Mobile-Only Icons: Core Action + Hamburger */}
-            {!isChatPage && (
-              <div className="md:hidden flex items-center gap-2">
-                <Link to={isFullUser ? "/home" : "/auth"} className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95">
-                  {isFullUser ? <MessageSquare className="w-6 h-6" /> : <User className="w-6 h-6" />}
-                </Link>
-                
-                <button 
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-                  className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95"
-                >
-                  {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                </button>
-              </div>
-            )}
+            {/* Mobile-Only Icons (Now visible on ALL pages) */}
+            <div className="md:hidden flex items-center gap-2">
+              <Link to={isFullUser ? "/home" : "/auth"} className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95">
+                {isFullUser ? <MessageSquare className="w-6 h-6" /> : <User className="w-6 h-6" />}
+              </Link>
+              
+              <button 
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+                className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95"
+              >
+                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+            </div>
             
           </div>
         </div>
@@ -157,7 +148,6 @@ export default function Navbar() {
             </Link>
           )}
 
-          {/* Massive Mobile CTA for Guests inside the menu */}
           {!isFullUser && !isChatPage && (
             <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
               <button

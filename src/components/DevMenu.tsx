@@ -1,16 +1,27 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bug, ChevronDown, Rocket } from 'lucide-react';
+import { Bug, ChevronDown, Rocket, UserCheck, UserX } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; // <-- Import Auth
 
 export default function DevMenu() {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Bring in the auth context to read and manipulate the user state
+  const { user, devMockLogin, logout } = useAuth();
 
-  // Safety net: This will completely hide the menu if you build for production
   if (import.meta.env.PROD) return null;
+
+  const handleAuthToggle = () => {
+    if (user) {
+      logout(); // If already logged in (or mocked), clear it
+    } else {
+      devMockLogin(); // Otherwise, inject the fake user
+    }
+    setIsOpen(false);
+  };
 
   return (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col items-end gap-2">
-      {/* The Expanded Menu */}
       {isOpen && (
         <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 w-56 flex flex-col gap-2 backdrop-blur-md animate-in slide-in-from-bottom-5">
           <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-700">
@@ -30,10 +41,31 @@ export default function DevMenu() {
           <Link to="/dev/chat" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
             💬 UI: Chat Room
           </Link>
+
+          {/* 🛠️ Authentication UI Toggle */}
+          <div className="mt-2 pt-2 border-t border-gray-700">
+            <button
+              onClick={handleAuthToggle}
+              className={`w-full flex items-center justify-center gap-2 text-sm font-bold p-2 rounded-lg transition-colors ${
+                user 
+                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
+                  : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+              }`}
+            >
+              {user ? (
+                <>
+                  <UserX className="w-4 h-4" /> Drop Mock Auth
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-4 h-4" /> Mock Logged-In
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* The Floating Action Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-12 h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-purple-500/30 transition-transform active:scale-95 border-2 border-purple-400/50"

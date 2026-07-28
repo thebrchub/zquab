@@ -5,12 +5,15 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogleLogin = () => {
-    setIsLoading(true);
-    // TODO: Wire this up to your backend Google OAuth flow
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
-  };
+  setIsLoading(true);
+  
+  // Replace this URL with your ACTUAL backend Google login route!
+  // Based on your screenshot, your API is at api.zquab.com
+  const GOOGLE_AUTH_URL = 'https://api.zquab.com/api/v1/auth/google/login'; 
+  
+  // Redirect the user to the backend to start the OAuth flow
+  window.location.href = GOOGLE_AUTH_URL;
+};
 
   return (
     <div className="min-h-[calc(100dvh-80px)] flex flex-col justify-center items-center p-4 bg-[var(--background)] relative overflow-hidden">

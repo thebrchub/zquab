@@ -15,6 +15,7 @@ interface AuthContextType {
   isLoading: boolean;
   loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
+  devMockLogin: () => void; // <-- NEW: Developer tool bypass
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -42,15 +43,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // The Magic: Restore session on page load
+  // 🛠️ DEV TOOL: Injects a fake fully-registered user into the state
+  const devMockLogin = () => {
+    setUser({
+      user_id: 'dev_mock_999',
+      is_guest: false,
+      username: 'dev_ninja',
+      name: 'Dev Ninja',
+      avatar_url: ''
+    });
+  };
+
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // Attempt to fetch the full user profile using the existing cookie
         const response = await apiClient.get('/users/me');
         const userData = response.data;
         
-        // Map backend response to our AuthUser state
         setUser({
           user_id: userData.id,
           is_guest: false,
@@ -59,12 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar_url: userData.avatar_url,
         });
       } catch (error: any) {
-        // If it throws a 401 (Unauthorized) or 403 (Forbidden - Guest Token),
-        // it means there is no active full account session.
         console.log('No active full user session found on load.');
         setUser(null);
       } finally {
-        // Stop the loading spinner and render the app
         setIsLoading(false);
       }
     };
@@ -73,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, loginAsGuest, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, loginAsGuest, logout, devMockLogin }}>
       {children}
     </AuthContext.Provider>
   );

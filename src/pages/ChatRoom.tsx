@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
 import MessageBubble from '../components/chat/MessageBubble';
@@ -9,6 +9,10 @@ import { Loader2, ArrowLeft, MoreVertical } from 'lucide-react';
 export default function ChatRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // 🛠️ DEV MODE CHECK
+  const isDevMode = location.pathname === '/dev/chat';
   
   // State
   const [messages, setMessages] = useState<any[]>([]);
@@ -22,8 +26,24 @@ export default function ChatRoom() {
   const topObserverRef = useRef<HTMLDivElement>(null);
   const { isConnected, sendMessage, lastMessage } = useWebSocket();
 
-  // 1. Initial Load of History
+  // 1. Initial Load of History (Or Dev Mock Data)
   useEffect(() => {
+    if (isDevMode) {
+      // 🛠️ Inject fake data to test the UI instantly
+      setMessages([
+        { id: '1', content: 'Hey there!', created_at: new Date(Date.now() - 3600000).toISOString(), isOwn: false, status: 'delivered' },
+        { id: '2', content: 'Hi! How are you doing?', created_at: new Date(Date.now() - 3500000).toISOString(), isOwn: true, status: 'read' },
+        { id: '3', content: 'I am doing great, just working on this awesome chat app UI. Testing to see how a really long message wraps around multiple lines when it hits the maximum width of the bubble container!', created_at: new Date(Date.now() - 3400000).toISOString(), isOwn: false, status: 'delivered' },
+        { id: '4', content: 'Looks amazing so far! 🚀', created_at: new Date(Date.now() - 3300000).toISOString(), isOwn: true, status: 'read' },
+      ]);
+      setLoading(false);
+      
+      setTimeout(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
+      return;
+    }
+
     if (!roomId) return;
     
     const fetchHistory = async () => {
@@ -51,10 +71,12 @@ export default function ChatRoom() {
     return () => {
       if (isConnected) sendMessage('leave_room', {}, roomId);
     };
-  }, [roomId, isConnected]);
+  }, [roomId, isConnected, isDevMode]);
 
   // 2. Listen for Live WebSocket Messages
   useEffect(() => {
+    if (isDevMode) return; // Skip WebSocket listening in Dev Mode
+
     if (!lastMessage || !roomId) return;
     
     if (lastMessage.room_id === roomId) {
@@ -74,10 +96,12 @@ export default function ChatRoom() {
         }, 100);
       }
     }
-  }, [lastMessage, roomId]);
+  }, [lastMessage, roomId, isDevMode]);
 
   // 3. Infinite Scroll (Upwards)
   useEffect(() => {
+    if (isDevMode) return; // Disable infinite scroll in Dev Mode
+
     const observer = new IntersectionObserver(
       async (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && messages.length > 0) {
@@ -103,12 +127,15 @@ export default function ChatRoom() {
     return () => {
       if (topObserverRef.current) observer.unobserve(topObserverRef.current);
     };
-  }, [hasMore, loadingMore, loading, messages, roomId]);
+  }, [hasMore, loadingMore, loading, messages, roomId, isDevMode]);
 
   const handleSend = (text: string) => {
-    if (!text.trim() || !isConnected) return;
+    if (!text.trim()) return;
+    if (!isDevMode && !isConnected) return; // Bypass connection check in Dev Mode
     
-    sendMessage('send_message', { text }, roomId);
+    if (!isDevMode) {
+      sendMessage('send_message', { text }, roomId);
+    }
     
     const optimisticMsg = {
       id: Date.now().toString(),
@@ -123,6 +150,23 @@ export default function ChatRoom() {
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, 100);
+
+    // 🛠️ DEV MODE AUTO-REPLY BOT
+    if (isDevMode) {
+      setTimeout(() => {
+        const replyMsg = {
+          id: (Date.now() + 1).toString(),
+          content: 'This is a mock reply from the Dev bot! 🤖',
+          created_at: new Date().toISOString(),
+          isOwn: false,
+          status: 'delivered' as const
+        };
+        setMessages(prev => [...prev, replyMsg]);
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 100);
+      }, 1000);
+    }
   };
 
   if (loading) {
@@ -145,10 +189,8 @@ export default function ChatRoom() {
   }
 
   return (
-    // 1. The absolute lock: fixed inset-0 ensures it never scrolls beyond the viewport
     <div className="fixed inset-0 flex flex-col bg-[var(--background)] z-50 w-full h-[100dvh] overflow-hidden">
       
-      {/* 2. Header: flex-shrink-0 keeps it from squishing */}
       <div className="flex-shrink-0 flex items-center justify-between p-3 sm:p-4 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe">
         <div className="flex items-center gap-2 sm:gap-3">
           <button 
@@ -163,7 +205,9 @@ export default function ChatRoom() {
                {/* Avatar placeholder */}
             </div>
             <div className="flex flex-col justify-center">
-              <h2 className="font-bold text-[var(--text-main)] leading-tight text-base sm:text-lg">Chat Room</h2>
+              <h2 className="font-bold text-[var(--text-main)] leading-tight text-base sm:text-lg">
+                {isDevMode ? 'UI Testing Room' : 'Chat Room'}
+              </h2>
               <p className="text-xs text-green-500 font-medium">Online</p>
             </div>
           </div>
@@ -174,7 +218,6 @@ export default function ChatRoom() {
         </button>
       </div>
 
-      {/* 3. Message Area: flex-1 takes remaining space, overscroll-contain stops iOS bouncing */}
       <div 
         ref={scrollRef}
         className="flex-1 overflow-y-auto overscroll-contain p-4 pb-2 custom-scrollbar bg-[var(--background)]"
@@ -202,11 +245,10 @@ export default function ChatRoom() {
         )}
       </div>
 
-      {/* 4. Input Area: Safe area padding for newer iPhones */}
       <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe">
         <ChatInput 
           onSend={handleSend}
-          disabled={!isConnected}
+          disabled={!isDevMode && !isConnected}
         />
       </div>
       
