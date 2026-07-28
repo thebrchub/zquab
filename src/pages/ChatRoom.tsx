@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
 import MessageBubble from '../components/chat/MessageBubble';
-import ChatInput from '../components/chat/ChatInput'; // Assuming you have this from before!
+import ChatInput from '../components/chat/ChatInput';
 import { Loader2, ArrowLeft, MoreVertical } from 'lucide-react';
 
 export default function ChatRoom() {
@@ -28,13 +28,10 @@ export default function ChatRoom() {
     
     const fetchHistory = async () => {
       try {
-        // API guide specifies cursor is message ID, defaults to newest if omitted
         const history = await roomsApi.getMessages(roomId);
-        // Reverse so newest is at the bottom of our UI
         setMessages(history.reverse());
         if (history.length < 50) setHasMore(false);
         
-        // Scroll to bottom on initial load
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 100);
@@ -47,7 +44,6 @@ export default function ChatRoom() {
 
     fetchHistory();
     
-    // Tell the WS server we entered this room
     if (isConnected) {
       sendMessage('join_room', {}, roomId);
     }
@@ -61,21 +57,18 @@ export default function ChatRoom() {
   useEffect(() => {
     if (!lastMessage || !roomId) return;
     
-    // Check if the incoming WS event belongs to this room
     if (lastMessage.room_id === roomId) {
       if (lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
-        // Handle incoming new message
         const newMsg = {
           id: lastMessage.id,
-          content: lastMessage.payload?.text || '', // Adjust based on your proto shape
+          content: lastMessage.payload?.text || '', 
           created_at: new Date(lastMessage.ts).toISOString(),
-          isOwn: false, // In reality, you'd check sender_id against your own user_id
+          isOwn: false, 
           status: 'delivered'
         };
         
         setMessages(prev => [...prev, newMsg]);
         
-        // Auto-scroll down for new messages
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 100);
@@ -90,16 +83,12 @@ export default function ChatRoom() {
         if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && messages.length > 0) {
           setLoadingMore(true);
           try {
-            // Find the oldest message ID to use as cursor
             const oldestId = messages[0].id;
             const olderMessages = await roomsApi.getMessages(roomId!, oldestId);
             
             if (olderMessages.length < 50) setHasMore(false);
             
-            // Prepend older messages
             setMessages(prev => [...olderMessages.reverse(), ...prev]);
-            
-            // Maintain scroll position (optional UX polish: calculate scroll height difference)
           } catch (err) {
             console.error('Failed to load older messages');
           } finally {
@@ -119,12 +108,10 @@ export default function ChatRoom() {
   const handleSend = (text: string) => {
     if (!text.trim() || !isConnected) return;
     
-    // Send via WebSocket
     sendMessage('send_message', { text }, roomId);
     
-    // Optimistically add to UI
     const optimisticMsg = {
-      id: Date.now().toString(), // Temporary ID
+      id: Date.now().toString(),
       content: text,
       created_at: new Date().toISOString(),
       isOwn: true,
@@ -140,7 +127,7 @@ export default function ChatRoom() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center h-full min-h-[50vh]">
+      <div className="fixed inset-0 flex items-center justify-center bg-[var(--background)] z-50">
         <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
       </div>
     );
@@ -148,9 +135,9 @@ export default function ChatRoom() {
 
   if (error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+      <div className="fixed inset-0 flex flex-col items-center justify-center p-6 text-center bg-[var(--background)] z-50">
         <p className="text-red-500 font-bold mb-4">{error}</p>
-        <button onClick={() => navigate('/home')} className="px-6 py-2 bg-[var(--card)] border border-[var(--border-color)] rounded-full text-[var(--text-main)]">
+        <button onClick={() => navigate('/home')} className="px-6 py-2 bg-[var(--card)] border border-[var(--border-color)] rounded-full text-[var(--text-main)] active:scale-95">
           Go Back
         </button>
       </div>
@@ -158,58 +145,65 @@ export default function ChatRoom() {
   }
 
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto flex flex-col h-[calc(100dvh-64px)] bg-[var(--background)] relative">
+    // 1. The absolute lock: fixed inset-0 ensures it never scrolls beyond the viewport
+    <div className="fixed inset-0 flex flex-col bg-[var(--background)] z-50 w-full h-[100dvh] overflow-hidden">
       
-      {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] z-10 sticky top-0">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-[var(--text-muted)] hover:text-[#3B82F6] transition-colors rounded-full hover:bg-[var(--background)]">
-            <ArrowLeft className="w-5 h-5" />
+      {/* 2. Header: flex-shrink-0 keeps it from squishing */}
+      <div className="flex-shrink-0 flex items-center justify-between p-3 sm:p-4 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="p-2 -ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
           </button>
           
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[var(--border-color)]"></div>
-            <div>
-              <h2 className="font-bold text-[var(--text-main)] leading-tight">Chat Room</h2>
+            <div className="w-10 h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0">
+               {/* Avatar placeholder */}
+            </div>
+            <div className="flex flex-col justify-center">
+              <h2 className="font-bold text-[var(--text-main)] leading-tight text-base sm:text-lg">Chat Room</h2>
               <p className="text-xs text-green-500 font-medium">Online</p>
             </div>
           </div>
         </div>
         
-        <button className="p-2 text-[var(--text-muted)] hover:bg-[var(--background)] rounded-full transition-colors">
+        <button className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors">
           <MoreVertical className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Messages Area */}
+      {/* 3. Message Area: flex-1 takes remaining space, overscroll-contain stops iOS bouncing */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+        className="flex-1 overflow-y-auto overscroll-contain p-4 pb-2 custom-scrollbar bg-[var(--background)]"
       >
-        {/* Invisible target for the Intersection Observer to trigger loading older messages */}
-        <div ref={topObserverRef} className="h-4 w-full flex justify-center py-4 mb-4">
+        <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2">
           {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
         </div>
         
         {messages.length === 0 ? (
-          <div className="text-center text-[var(--text-muted)] mt-10">
+          <div className="text-center text-[var(--text-muted)] font-medium mt-10 bg-[var(--card)] border border-[var(--border-color)] p-4 rounded-xl mx-auto max-w-xs">
             No messages yet. Say hello!
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <MessageBubble 
-              key={msg.id || index}
-              content={msg.content}
-              isOwn={msg.isOwn}
-              status={msg.status}
-              time={msg.created_at}
-            />
-          ))
+          <div className="space-y-3">
+            {messages.map((msg, index) => (
+              <MessageBubble 
+                key={msg.id || index}
+                content={msg.content}
+                isOwn={msg.isOwn}
+                status={msg.status}
+                time={msg.created_at}
+              />
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Reusing the ChatInput we tweaked earlier! */}
-      <div className="flex-shrink-0">
+      {/* 4. Input Area: Safe area padding for newer iPhones */}
+      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe">
         <ChatInput 
           onSend={handleSend}
           disabled={!isConnected}

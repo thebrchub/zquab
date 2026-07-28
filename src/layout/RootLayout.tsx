@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import ScrollToTop from '../components/ScrollToTop'; 
+import DevMenu from '../components/DevMenu';
 
 export default function RootLayout() {
   const location = useLocation();
@@ -33,6 +34,8 @@ export default function RootLayout() {
       />
       
       {!isLandingPage && !isChatPage && <Footer />}
+
+      <DevMenu />
    
     </div>
   );

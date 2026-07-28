@@ -4,6 +4,10 @@ import { apiClient } from '../api/client';
 interface AuthUser {
   user_id: string;
   is_guest: boolean;
+  username?: string;
+  name?: string;
+  email?: string;
+  avatar_url?: string;
 }
 
 interface AuthContextType {
@@ -19,13 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Hits the backend to mint a new guest identity, or reuses the existing cookie.
   const loginAsGuest = async () => {
     try {
-      // Remove <AuthUser> here
       const response = await apiClient.post('/auth/guest');
-      
-      // And cast the data as AuthUser here instead!
       setUser(response.data as AuthUser);
     } catch (error) {
       console.error('Guest login failed:', error);
@@ -33,7 +33,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Clears the cookies on the backend and resets local state
   const logout = async () => {
     try {
       await apiClient.post('/auth/logout');
@@ -43,10 +42,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // The Magic: Restore session on page load
   useEffect(() => {
-    // This stops the app from rendering private routes until we verify 
-    // if the user is already authenticated (logic can be expanded later).
-    setIsLoading(false);
+    const checkSession = async () => {
+      try {
+        // Attempt to fetch the full user profile using the existing cookie
+        const response = await apiClient.get('/users/me');
+        const userData = response.data;
+        
+        // Map backend response to our AuthUser state
+        setUser({
+          user_id: userData.id,
+          is_guest: false,
+          username: userData.username,
+          name: userData.name,
+          avatar_url: userData.avatar_url,
+        });
+      } catch (error: any) {
+        // If it throws a 401 (Unauthorized) or 403 (Forbidden - Guest Token),
+        // it means there is no active full account session.
+        console.log('No active full user session found on load.');
+        setUser(null);
+      } finally {
+        // Stop the loading spinner and render the app
+        setIsLoading(false);
+      }
+    };
+
+    checkSession();
   }, []);
 
   return (
@@ -56,7 +79,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Custom hook for easy access across the app
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

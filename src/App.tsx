@@ -7,7 +7,9 @@ import { Loader2 } from 'lucide-react';
 
 // Public/Static Pages
 import LandingPage from './pages/LandingPage';
-import ChatPage from './pages/ChatPage'; // Anonymous random chat
+import ChatPage from './pages/ChatPage';
+import AuthPage from './pages/AuthPage';
+import BlogPage from './pages/BlogPage';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Safety from './pages/Safety';
@@ -15,29 +17,64 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 
 // Protected App Pages
-import HomePage from './pages/HomePage'; // Dashboard
-import ChatRoom from './pages/ChatRoom'; // 1-on-1 DM chat
+import OnboardingPage from './pages/OnboardingPage'; // NEW: Onboarding flow
+import HomePage from './pages/HomePage';
+import ChatRoom from './pages/ChatRoom';
 import Profile from './pages/Profile';
 import UserProfile from './pages/UserProfile';
 import FriendsHub from './pages/FriendsHub';
 
-// Protected Route Wrapper
-// Ensures the user has an active guest/logged-in session before accessing internal pages
+// 1. Protected Route Wrapper (For standard logged-in pages)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-[100dvh]">
+      <div className="flex-1 flex items-center justify-center min-h-[100dvh] bg-[var(--background)]">
         <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
       </div>
     );
   }
   
-  // If there is no user session, redirect to the landing page
-  if (!user) {
-    return <Navigate to="/" replace />;
+  // If there is no session, OR the user is just a Guest, redirect them to Auth
+  if (!user || user.is_guest) {
+    return <Navigate to="/auth" replace />;
   }
+
+  // If they are a registered user but haven't set a username yet, force onboarding
+  if (!user.username) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  
+  return <>{children}</>;
+}
+
+// 2. Auth Route Wrapper (Prevents logged-in users from seeing the login page)
+function AuthRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) return null;
+  
+  if (user && !user.is_guest) {
+    // Direct to onboarding if profile is incomplete, otherwise to home
+    if (!user.username) return <Navigate to="/onboarding" replace />;
+    return <Navigate to="/home" replace />;
+  }
+  
+  return <>{children}</>;
+}
+
+// 3. Onboarding Route Wrapper (Locks users here until profile is complete)
+function OnboardingRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) return null;
+
+  // Must be logged in via Google to see this page
+  if (!user || user.is_guest) return <Navigate to="/auth" replace />;
+  
+  // If they already have a username, they don't need onboarding anymore
+  if (user.username) return <Navigate to="/home" replace />;
   
   return <>{children}</>;
 }
@@ -49,17 +86,37 @@ function App() {
         <WebSocketProvider>
           <BrowserRouter>
             <Routes>
-              {/* RootLayout wraps everything to provide Navbar/Footer handling */}
               <Route element={<RootLayout />}>
                 
                 {/* Public Routes */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/blog" element={<BlogPage />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/safety" element={<Safety />} />
                 <Route path="/contact" element={<Contact />} />
+
+                {/* Auth Route */}
+                <Route 
+                  path="/auth" 
+                  element={
+                    <AuthRoute>
+                      <AuthPage />
+                    </AuthRoute>
+                  } 
+                />
+
+                {/* Onboarding Route */}
+                <Route 
+                  path="/onboarding" 
+                  element={
+                    <OnboardingRoute>
+                      <OnboardingPage />
+                    </OnboardingRoute>
+                  } 
+                />
 
                 {/* Protected Dashboard & Social Routes */}
                 <Route 
@@ -111,6 +168,11 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
                 
               </Route>
+              {/* 🛠️ DEV UI TESTING ROUTES (No Auth Wrappers) */}
+<Route path="/dev/onboarding" element={<OnboardingPage />} />
+<Route path="/dev/auth" element={<AuthPage />} />
+<Route path="/dev/home" element={<HomePage />} />
+<Route path="/dev/chat" element={<ChatRoom />} />
             </Routes>
           </BrowserRouter>
         </WebSocketProvider>
