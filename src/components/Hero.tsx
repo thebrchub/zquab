@@ -8,16 +8,23 @@ import { useAuth } from '../context/AuthContext';
 export default function Hero() {
   const { theme } = useTheme(); 
   
-  // Bring in Auth and Routing
-  const { loginAsGuest } = useAuth();
+  // 🛠️ Extracted `user` to check current auth state
+  const { user, loginAsGuest } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
   const handleStartChatting = async () => {
+    // 🛠️ 1. If they are already a guest or full user, skip login and jump to chat!
+    if (user) {
+      navigate('/chat');
+      return;
+    }
+
+    // 🛠️ 2. If they have no session, mint a guest token silently
     setLoading(true);
     try {
       await loginAsGuest();
-      navigate('/home'); // Routes to the dashboard after minting the guest token
+      navigate('/chat'); 
     } catch (err) {
       console.error('Failed to authenticate:', err);
       alert('Failed to connect. Please try again.');
@@ -73,7 +80,6 @@ export default function Hero() {
               
               <div className="flex flex-col sm:flex-row gap-4 mb-10">
                 
-                {/* Changed from Link to Button to handle Auth */}
                 <button 
                   onClick={handleStartChatting}
                   disabled={loading}
