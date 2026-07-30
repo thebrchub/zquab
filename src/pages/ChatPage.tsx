@@ -3,17 +3,16 @@ import ReactCountryFlag from 'react-country-flag';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
+import TypingIndicator from '../components/chat/TypingIndicator'; // 🛠️ Imported the indicator
 import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, HeartHandshake, ImageMinus, UserX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
-import TypingIndicator from '../components/chat/TypingIndicator';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 type SystemMessage = { id: string; text: string };
 
-// 🛠️ UTILITY: Compress and convert ANY image to .webp
 const compressImageToWebP = (file: File): Promise<File> => {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
@@ -75,10 +74,11 @@ export default function ChatPage() {
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
 
+  // 🛠️ Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingStateRef = useRef(false);
-    
+  
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
@@ -129,13 +129,13 @@ export default function ChatPage() {
       onLocationDetected: (country) => {
         setUserCountry(country);
       },
-
+      // 🛠️ Syncing the state with the WebSocket callback
       onPartnerTyping: (isTyping) => {
         setIsPartnerTyping(isTyping);
       },
-
       onDisconnected: () => {
         setStatus('disconnected');
+        setIsPartnerTyping(false); // Reset typing on disconnect
       },
       onSocketOpen: () => {
         setSystemMessages((prev) => [...prev, { id: 'sys-open', text: 'Connected to the chat server.' }]);
@@ -185,11 +185,12 @@ export default function ChatPage() {
     };
   }, [chatClient]);
 
+  // Ensure scroll stays at the bottom when typing indicators appear/disappear
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [messages, status, systemMessages]);
+  }, [messages, status, systemMessages, isPartnerTyping]);
 
   const handleStartChat = () => {
     setStatus('searching');
@@ -201,10 +202,33 @@ export default function ChatPage() {
 
   const handleSend = (text: string) => {
     if (status !== 'connected') return;
+    
+    // Cancel typing immediately upon sending
+    if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+    isTypingStateRef.current = false;
+    chatClient.sendTypingEnd();
+
     const temporaryId = chatClient.sendChatMessage(text);
     if (temporaryId) {
       setMessages((prev) => [...prev, { id: temporaryId, text, isOwn: true }]);
     }
+  };
+
+  // 🛠️ Debounced Outgoing Typing Handler
+  const handleTyping = () => {
+    if (status !== 'connected') return;
+    
+    if (!isTypingStateRef.current) {
+      isTypingStateRef.current = true;
+      chatClient.sendTypingStart();
+    }
+
+    if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+    
+    typingTimeoutRef.current = window.setTimeout(() => {
+      isTypingStateRef.current = false;
+      chatClient.sendTypingEnd();
+    }, 2000); 
   };
 
   const handleNext = () => {
@@ -215,6 +239,7 @@ export default function ChatPage() {
     setShowMobileMenu(false);
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
+    setIsPartnerTyping(false); // Clear typing on next
     clearPhotoRequestTimeout();
   };
 
@@ -278,24 +303,7 @@ export default function ChatPage() {
     navigate('/');
   };
 
-  const handleTyping = () => {
-    if (status !== 'connected') return;
-    
-    if (!isTypingStateRef.current) {
-      isTypingStateRef.current = true;
-      chatClient.sendTypingStart();
-    }
-
-    if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
-    
-    typingTimeoutRef.current = window.setTimeout(() => {
-      isTypingStateRef.current = false;
-      chatClient.sendTypingEnd();
-    }, 2000); // Wait 2 seconds of no typing before sending 'typing_end'
-  };
-
   return (
-    // 🛠️ OUTERMOST WRAPPER: Limits the height of the entire page to screen size minus navbar.
     <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)]">
       
       {/* Rules & Safety Modal */}
@@ -366,7 +374,6 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* 🛠️ MAIN CHAT COLUMN: Must be flex-1 so it shares space with the sidebar properly */}
       <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] rounded-none md:rounded-2xl border-0 md:border md:border-[var(--border-color)] overflow-hidden relative">
         
         {/* Leave Chat Warning Modal */}
@@ -453,7 +460,6 @@ export default function ChatPage() {
                 <UserPlus className="w-4 h-4" /> Next
               </button>
             )}
-            {isPartnerTyping && <TypingIndicator />}
             
             <div className="relative">
               <button 
@@ -518,6 +524,9 @@ export default function ChatPage() {
               <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
             )
           ))}
+
+          {/* 🛠️ The ACTUAL Typing Indicator inside the scroll container */}
+          {isPartnerTyping && <TypingIndicator />}
         </div>
 
         <input
@@ -563,12 +572,11 @@ export default function ChatPage() {
             disabled={status !== 'connected'}
             onRequestPhoto={handleRequestPhoto}
             photoRequestDisabled={photoRequestBusy || status === 'idle'}
-            onTyping={handleTyping}
+            onTyping={handleTyping} // 🛠️ Sends typing events on keystrokes
           />
         </div>
       </div>
 
-      {/* 🛠️ RIGHT SIDEBAR: Properly separated from the chat column now */}
       <div className="hidden md:block w-80 h-full flex-shrink-0">
         <ConnectionCard status={status} onNext={handleNext} userCountry={userCountry} partnerCountry={partnerCountry} />
       </div>

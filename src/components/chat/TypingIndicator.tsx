@@ -2,22 +2,27 @@ import { motion } from 'framer-motion';
 
 export default function TypingIndicator() {
   return (
-    <div className="flex w-full my-2">
-      <div className="bg-[#1a1a1a] border border-[var(--border-color)] px-4 py-3.5 rounded-[1.25rem] rounded-tl-sm flex items-center gap-1.5 shadow-sm w-fit">
+    // justify-start ensures it locks to the left exactly like an incoming message
+    <div className="flex w-full my-2 justify-start">
+      {/* 
+        Using CSS variables for the background and border so it adapts to Light/Dark mode.
+        opacity-80 makes the bubble itself sit slightly back in the visual hierarchy.
+      */}
+      <div className="bg-[var(--card)] border border-[var(--border-color)] px-4 py-4 rounded-[1.25rem] rounded-tl-sm flex items-center gap-1.5 shadow-sm w-fit opacity-80">
         <motion.div 
-          className="w-2 h-2 bg-gray-400 rounded-full" 
-          animate={{ y: [0, -4, 0] }} 
-          transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0 }} 
+          className="w-2 h-2 bg-[var(--text-muted)] rounded-full" 
+          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
+          transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut", delay: 0 }} 
         />
         <motion.div 
-          className="w-2 h-2 bg-gray-400 rounded-full" 
-          animate={{ y: [0, -4, 0] }} 
-          transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0.15 }} 
+          className="w-2 h-2 bg-[var(--text-muted)] rounded-full" 
+          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
+          transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut", delay: 0.2 }} 
         />
         <motion.div 
-          className="w-2 h-2 bg-gray-400 rounded-full" 
-          animate={{ y: [0, -4, 0] }} 
-          transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut", delay: 0.3 }} 
+          className="w-2 h-2 bg-[var(--text-muted)] rounded-full" 
+          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }} 
+          transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut", delay: 0.4 }} 
         />
       </div>
     </div>
