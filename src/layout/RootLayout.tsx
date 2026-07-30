@@ -5,10 +5,16 @@ import Footer from '../components/Footer';
 import ScrollToTop from '../components/ScrollToTop'; 
 import DevMenu from '../components/DevMenu';
 
+
 export default function RootLayout() {
   const location = useLocation();
+  
+  // 🛠️ Check if we are on pages that should NOT have a footer
   const isLandingPage = location.pathname === '/';
-  const isChatPage = location.pathname === '/chat';
+  
+  // 🛠️ Use startsWith to catch /home, /chat, and /chat/12345
+  const isAppInterface = location.pathname.startsWith('/home') || 
+                         location.pathname.startsWith('/chat');
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--background)] text-[var(--text-main)] font-sans transition-colors duration-300">
@@ -33,7 +39,8 @@ export default function RootLayout() {
         }} 
       />
       
-      {!isLandingPage && !isChatPage && <Footer />}
+      {/* 🛠️ Hide the footer on the landing page AND app interfaces */}
+      {!isLandingPage && !isAppInterface && <Footer />}
 
       <DevMenu />
    
