@@ -16,11 +16,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
-  const connect = () => {
-    // Note: If you are using cookies (which your apiClient does), the browser 
-    // will automatically send them with this WS upgrade request.
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+ const connect = () => {
+    // 🛠️ Grab the proper backend URL from env, fallback to api.zquab.com
+    const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'wss://api.zquab.com';
+    const wsUrl = `${WS_BASE}/ws`;
     
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer'; // Crucial for protobuf!
