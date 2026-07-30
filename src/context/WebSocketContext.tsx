@@ -1,11 +1,17 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-// TODO: Import your actual generated protobuf bindings here!
-// import { chatpb } from '../proto/chatpb'; 
+import protobuf from 'protobufjs';
+import chatProtoSrc from '../proto/chat.proto?raw';
+
+// 🛠️ Parse the protobufs directly from the raw string (same as chatClient.ts)
+const root = new protobuf.Root();
+protobuf.parse(chatProtoSrc, root);
+const Envelope = root.lookupType('chatpb.Envelope');
+const ChatMessageProto = root.lookupType('chatpb.ChatMessage');
 
 interface WebSocketContextType {
   isConnected: boolean;
   sendMessage: (type: string, payload?: any, roomId?: string, to?: string) => void;
-  lastMessage: any | null; // Replace 'any' with chatpb.Envelope once imported
+  lastMessage: any | null; 
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -16,8 +22,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
- const connect = () => {
-    // 🛠️ Grab the proper backend URL from env, fallback to api.zquab.com
+  const connect = () => {
     const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'wss://api.zquab.com';
     const wsUrl = `${WS_BASE}/ws`;
     
@@ -28,7 +33,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       console.log('WebSocket connected');
       setIsConnected(true);
       
-      // Clear any pending reconnects
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
@@ -37,15 +41,29 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
     ws.onmessage = (event) => {
       try {
-        // TODO: Decode the arraybuffer using your protobuf bindings
-        // const buffer = new Uint8Array(event.data);
-        // const envelope = chatpb.Envelope.decode(buffer);
+        if (!(event.data instanceof ArrayBuffer)) return;
         
-        // TEMPORARY FIX: Passing the raw event data to satisfy TypeScript.
-        // Once you plug in protobufs, change this to: setLastMessage(envelope);
-        setLastMessage(event.data);
+        // 🛠️ Decode the outer envelope
+        const bytes = new Uint8Array(event.data);
+        const envelope = Envelope.decode(bytes) as any;
         
-        console.log('Received raw WS message', event.data);
+        let decodedPayload = null;
+        
+        // 🛠️ If there is text content, decode the inner ChatMessage payload
+        if (envelope.payload && envelope.payload.length > 0) {
+          try {
+            decodedPayload = ChatMessageProto.decode(envelope.payload);
+          } catch (e) {
+            console.warn("Could not decode inner payload", e);
+          }
+        }
+        
+        // Pass it to state so ChatRoom.tsx can read lastMessage.payload.text
+        setLastMessage({
+          ...envelope,
+          payload: decodedPayload || envelope.payload
+        });
+        
       } catch (err) {
         console.error('Failed to decode WS message:', err);
       }
@@ -54,13 +72,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     ws.onclose = () => {
       console.log('WebSocket disconnected. Reconnecting in 3s...');
       setIsConnected(false);
-      // Simple auto-reconnect logic
       reconnectTimeoutRef.current = window.setTimeout(connect, 3000);
     };
 
     ws.onerror = (err) => {
       console.error('WebSocket error:', err);
-      ws.close(); // Force close to trigger the onclose reconnect
+      ws.close(); 
     };
 
     wsRef.current = ws;
@@ -74,7 +91,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Helper to construct and send a protobuf Envelope
   const sendMessage = (type: string, payload?: any, roomId?: string, to?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('Cannot send message: WebSocket is not open');
@@ -82,20 +98,30 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // TODO: Create and encode the envelope using your protobuf bindings
-      /*
-      const message = chatpb.Envelope.create({
+      let payloadBytes: any = new Uint8Array();
+      
+      // 🛠️ Encode the inner payload if we are sending text
+      if (type === 'send_message' && payload?.text) {
+        const chatMsg = ChatMessageProto.create({ text: payload.text });
+        payloadBytes = ChatMessageProto.encode(chatMsg).finish();
+      }
+
+      // 🛠️ Create and encode the outer envelope
+      const envelope = Envelope.create({
         type,
-        room_id: roomId,
+        roomId,
         to,
-        payload, // Ensure payload is encoded as bytes if required by your proto
+        payload: payloadBytes,
         ts: Date.now(),
-        id: crypto.randomUUID()
+        id: globalThis.crypto?.randomUUID?.() || `${Date.now()}`
       });
-      const buffer = chatpb.Envelope.encode(message).finish();
+      
+      const bytes = Envelope.encode(envelope).finish();
+      const buffer = bytes.buffer instanceof ArrayBuffer
+        ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        : new Uint8Array(bytes).slice().buffer;
+        
       wsRef.current.send(buffer);
-      */
-     console.log('Sending message:', { type, roomId, to, payload });
     } catch (err) {
       console.error('Failed to encode/send message:', err);
     }

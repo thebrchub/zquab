@@ -4,13 +4,32 @@ import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
-import { Loader2, ArrowLeft, MoreVertical } from 'lucide-react';
+import { Loader2, ArrowLeft, MoreVertical, User } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
 
-export default function ChatRoom() {
-  const { roomId } = useParams<{ roomId: string }>();
+export default function ChatRoom({ 
+  inlineRoomId, 
+  inlineFriendName, 
+  inlineFriendAvatar 
+}: { 
+  inlineRoomId?: string, 
+  inlineFriendName?: string, 
+  inlineFriendAvatar?: string 
+} = {}) {
+  // const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 🛠️ Use inline props first (Desktop Split-Screen), fallback to router params (Mobile)
+  const routerParams = useParams<{ roomId: string }>();
+  const roomId = inlineRoomId || routerParams.roomId;
+  
+  const friendName = inlineFriendName || location.state?.friendName || 'Chat Room';
+  const friendAvatar = inlineFriendAvatar || location.state?.friendAvatar || null;
+  
+  // 🛠️ Grab the friend's details passed from the Inbox!
+
+
   
   // DEV MODE CHECK
   const isDevMode = location.pathname === '/dev/chat';
@@ -77,12 +96,11 @@ export default function ChatRoom() {
     };
   }, [roomId, isConnected, isDevMode]);
 
-  // 2. Listen for Live WebSocket Messages (INCOMING)
+  // 2. Listen for Live WebSocket Messages
   useEffect(() => {
     if (isDevMode || !lastMessage || !roomId) return;
     
     if (lastMessage.room_id === roomId) {
-      // Handle Incoming Messages
       if (lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
         const newMsg = {
           id: lastMessage.id,
@@ -93,23 +111,19 @@ export default function ChatRoom() {
         };
         
         setMessages(prev => [...prev, newMsg]);
-        setIsPartnerTyping(false); // 🛠️ Instantly clear typing indicator when a message drops
+        setIsPartnerTyping(false);
         
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 100);
       }
-      // 🛠️ Handle Incoming Typing Events
       else if (lastMessage.type === 'typing_start' || lastMessage.type === 'typing_status') {
         setIsPartnerTyping(true);
-        
-        // Push scroll down slightly if they are at the bottom so they see the indicator pop up
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 50);
 
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
-        // Auto-hide indicator after 4 seconds if 'typing_end' gets dropped by network
         partnerTypingTimeoutRef.current = window.setTimeout(() => setIsPartnerTyping(false), 4000);
       } 
       else if (lastMessage.type === 'typing_end') {
@@ -148,7 +162,6 @@ export default function ChatRoom() {
     };
   }, [hasMore, loadingMore, loading, messages, roomId, isDevMode]);
 
-  // 🛠️ 4. Handle Outgoing Typing Events (Debounced)
   const handleTyping = () => {
     if (isDevMode || !isConnected) return;
     
@@ -172,7 +185,6 @@ export default function ChatRoom() {
     if (!isDevMode) {
       sendMessage('send_message', { text }, roomId);
       
-      // 🛠️ Instantly cancel our typing state when sending
       if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
       isMyTypingStateRef.current = false;
       sendMessage('typing_end', {}, roomId);
@@ -225,14 +237,19 @@ export default function ChatRoom() {
           </button>
           
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0">
-               {/* Avatar placeholder */}
+            {/* 🛠️ Friend Avatar Display */}
+            <div className="w-10 h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0 flex items-center justify-center">
+              {friendAvatar ? (
+                <img src={friendAvatar} alt={friendName} className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-5 h-5 text-[var(--text-muted)]" />
+              )}
             </div>
             <div className="flex flex-col justify-center">
+              {/* 🛠️ Dynamic Friend Name */}
               <h2 className="font-bold text-[var(--text-main)] leading-tight text-base sm:text-lg">
-                {isDevMode ? 'UI Testing Room' : 'Chat Room'}
+                {isDevMode ? 'UI Testing Room' : friendName}
               </h2>
-              {/* Optional: You can change "Online" to "Typing..." here if you prefer header notifications! */}
               <p className="text-xs text-green-500 font-medium">Online</p>
             </div>
           </div>
@@ -267,7 +284,6 @@ export default function ChatRoom() {
               />
             ))}
             
-            {/* 🛠️ Render the indicator below the latest message if partner is typing */}
             {isPartnerTyping && (
               <TypingIndicator />
             )}
@@ -279,7 +295,7 @@ export default function ChatRoom() {
         <ChatInput 
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
-          onTyping={handleTyping} // 🛠️ Pass the new handleTyping function here
+          onTyping={handleTyping} 
         />
       </div>
       
