@@ -35,34 +35,48 @@ export default function OnboardingPage() {
     setIsLoading(true);
     
     try {
-      // 🛠️ SWITCHED TO PATCH: Safer for partial updates and overlapping state
-      await apiClient.patch('/users/me', {
+      // 🛠️ 1. Dynamically build the payload
+      const payload: any = {
         username: username,
-        name: username, 
-        bio: bio,
-        gender: gender,
-      });
+        name: username, // Mirroring username to name to satisfy the backend
+      };
+
+      // 🛠️ 2. Only attach bio if it's not empty
+      if (bio.trim()) {
+        payload.bio = bio.trim();
+      }
+
+      // 🛠️ 3. Translate our UI text to the Backend's expected Enum
+      if (gender === 'Prefer not to say') {
+        payload.gender = 'Any';
+      } else {
+        payload.gender = gender;
+      }
+
+      // 🛠️ 4. Send the cleaned-up payload
+      await apiClient.patch('/users/me', payload);
       
       // Force the AuthContext to fetch the newly saved username
       await refreshSession();
 
-      // Now it is safe to navigate
+      // Navigate home!
       navigate('/home'); 
 
     } catch (error: any) {
       console.error(error);
       
-      // 🛠️ Handle the 409 Conflict explicitly
       if (error.response?.status === 409) {
         alert("That username is either already taken, or your profile is already permanently set up! Try refreshing the page.");
       } else {
-        alert("Failed to save profile. Please try again.");
+        // 🛠️ If the backend rejects something (like a 400 Bad Request), we will now see the exact reason
+        alert(error.response?.data?.error || "Failed to save profile. Please try again.");
       }
       
     } finally {
       setIsLoading(false);
     }
   };
+  
   return (
     <div className="min-h-[100dvh] bg-[var(--background)] py-10 px-4 sm:px-6 flex justify-center">
       <div className="w-full max-w-lg z-10">

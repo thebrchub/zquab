@@ -5,13 +5,14 @@ import { useWebSocket } from '../context/WebSocketContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import { Loader2, ArrowLeft, MoreVertical } from 'lucide-react';
+import TypingIndicator from '../components/chat/TypingIndicator';
 
 export default function ChatRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   
-  // 🛠️ DEV MODE CHECK
+  // DEV MODE CHECK
   const isDevMode = location.pathname === '/dev/chat';
   
   // State
@@ -26,15 +27,18 @@ export default function ChatRoom() {
   const topObserverRef = useRef<HTMLDivElement>(null);
   const { isConnected, sendMessage, lastMessage } = useWebSocket();
 
-  // 1. Initial Load of History (Or Dev Mock Data)
+  // Typing State
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const partnerTypingTimeoutRef = useRef<number | null>(null);
+  const myTypingTimeoutRef = useRef<number | null>(null);
+  const isMyTypingStateRef = useRef(false);
+
+  // 1. Initial Load of History
   useEffect(() => {
     if (isDevMode) {
-      // 🛠️ Inject fake data to test the UI instantly
       setMessages([
         { id: '1', content: 'Hey there!', created_at: new Date(Date.now() - 3600000).toISOString(), isOwn: false, status: 'delivered' },
         { id: '2', content: 'Hi! How are you doing?', created_at: new Date(Date.now() - 3500000).toISOString(), isOwn: true, status: 'read' },
-        { id: '3', content: 'I am doing great, just working on this awesome chat app UI. Testing to see how a really long message wraps around multiple lines when it hits the maximum width of the bubble container!', created_at: new Date(Date.now() - 3400000).toISOString(), isOwn: false, status: 'delivered' },
-        { id: '4', content: 'Looks amazing so far! 🚀', created_at: new Date(Date.now() - 3300000).toISOString(), isOwn: true, status: 'read' },
       ]);
       setLoading(false);
       
@@ -73,13 +77,12 @@ export default function ChatRoom() {
     };
   }, [roomId, isConnected, isDevMode]);
 
-  // 2. Listen for Live WebSocket Messages
+  // 2. Listen for Live WebSocket Messages (INCOMING)
   useEffect(() => {
-    if (isDevMode) return; // Skip WebSocket listening in Dev Mode
-
-    if (!lastMessage || !roomId) return;
+    if (isDevMode || !lastMessage || !roomId) return;
     
     if (lastMessage.room_id === roomId) {
+      // Handle Incoming Messages
       if (lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
         const newMsg = {
           id: lastMessage.id,
@@ -90,17 +93,35 @@ export default function ChatRoom() {
         };
         
         setMessages(prev => [...prev, newMsg]);
+        setIsPartnerTyping(false); // 🛠️ Instantly clear typing indicator when a message drops
         
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 100);
       }
+      // 🛠️ Handle Incoming Typing Events
+      else if (lastMessage.type === 'typing_start' || lastMessage.type === 'typing_status') {
+        setIsPartnerTyping(true);
+        
+        // Push scroll down slightly if they are at the bottom so they see the indicator pop up
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 50);
+
+        if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
+        // Auto-hide indicator after 4 seconds if 'typing_end' gets dropped by network
+        partnerTypingTimeoutRef.current = window.setTimeout(() => setIsPartnerTyping(false), 4000);
+      } 
+      else if (lastMessage.type === 'typing_end') {
+        setIsPartnerTyping(false);
+        if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
+      }
     }
   }, [lastMessage, roomId, isDevMode]);
 
-  // 3. Infinite Scroll (Upwards)
+  // 3. Infinite Scroll
   useEffect(() => {
-    if (isDevMode) return; // Disable infinite scroll in Dev Mode
+    if (isDevMode) return;
 
     const observer = new IntersectionObserver(
       async (entries) => {
@@ -109,9 +130,7 @@ export default function ChatRoom() {
           try {
             const oldestId = messages[0].id;
             const olderMessages = await roomsApi.getMessages(roomId!, oldestId);
-            
             if (olderMessages.length < 50) setHasMore(false);
-            
             setMessages(prev => [...olderMessages.reverse(), ...prev]);
           } catch (err) {
             console.error('Failed to load older messages');
@@ -129,12 +148,34 @@ export default function ChatRoom() {
     };
   }, [hasMore, loadingMore, loading, messages, roomId, isDevMode]);
 
+  // 🛠️ 4. Handle Outgoing Typing Events (Debounced)
+  const handleTyping = () => {
+    if (isDevMode || !isConnected) return;
+    
+    if (!isMyTypingStateRef.current) {
+      isMyTypingStateRef.current = true;
+      sendMessage('typing_start', {}, roomId);
+    }
+
+    if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
+    
+    myTypingTimeoutRef.current = window.setTimeout(() => {
+      isMyTypingStateRef.current = false;
+      sendMessage('typing_end', {}, roomId);
+    }, 2000);
+  };
+
   const handleSend = (text: string) => {
     if (!text.trim()) return;
-    if (!isDevMode && !isConnected) return; // Bypass connection check in Dev Mode
+    if (!isDevMode && !isConnected) return;
     
     if (!isDevMode) {
       sendMessage('send_message', { text }, roomId);
+      
+      // 🛠️ Instantly cancel our typing state when sending
+      if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
+      isMyTypingStateRef.current = false;
+      sendMessage('typing_end', {}, roomId);
     }
     
     const optimisticMsg = {
@@ -150,23 +191,6 @@ export default function ChatRoom() {
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, 100);
-
-    // 🛠️ DEV MODE AUTO-REPLY BOT
-    if (isDevMode) {
-      setTimeout(() => {
-        const replyMsg = {
-          id: (Date.now() + 1).toString(),
-          content: 'This is a mock reply from the Dev bot! 🤖',
-          created_at: new Date().toISOString(),
-          isOwn: false,
-          status: 'delivered' as const
-        };
-        setMessages(prev => [...prev, replyMsg]);
-        setTimeout(() => {
-          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }, 100);
-      }, 1000);
-    }
   };
 
   if (loading) {
@@ -208,6 +232,7 @@ export default function ChatRoom() {
               <h2 className="font-bold text-[var(--text-main)] leading-tight text-base sm:text-lg">
                 {isDevMode ? 'UI Testing Room' : 'Chat Room'}
               </h2>
+              {/* Optional: You can change "Online" to "Typing..." here if you prefer header notifications! */}
               <p className="text-xs text-green-500 font-medium">Online</p>
             </div>
           </div>
@@ -226,7 +251,7 @@ export default function ChatRoom() {
           {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
         </div>
         
-        {messages.length === 0 ? (
+        {messages.length === 0 && !isPartnerTyping ? (
           <div className="text-center text-[var(--text-muted)] font-medium mt-10 bg-[var(--card)] border border-[var(--border-color)] p-4 rounded-xl mx-auto max-w-xs">
             No messages yet. Say hello!
           </div>
@@ -241,6 +266,11 @@ export default function ChatRoom() {
                 time={msg.created_at}
               />
             ))}
+            
+            {/* 🛠️ Render the indicator below the latest message if partner is typing */}
+            {isPartnerTyping && (
+              <TypingIndicator />
+            )}
           </div>
         )}
       </div>
@@ -249,6 +279,7 @@ export default function ChatRoom() {
         <ChatInput 
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
+          onTyping={handleTyping} // 🛠️ Pass the new handleTyping function here
         />
       </div>
       

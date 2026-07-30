@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
+import TypingIndicator from '../components/chat/TypingIndicator';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 type SystemMessage = { id: string; text: string };
@@ -73,7 +74,11 @@ export default function ChatPage() {
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
-  
+
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const typingTimeoutRef = useRef<number | null>(null);
+  const isTypingStateRef = useRef(false);
+    
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
@@ -124,6 +129,11 @@ export default function ChatPage() {
       onLocationDetected: (country) => {
         setUserCountry(country);
       },
+
+      onPartnerTyping: (isTyping) => {
+        setIsPartnerTyping(isTyping);
+      },
+
       onDisconnected: () => {
         setStatus('disconnected');
       },
@@ -266,6 +276,22 @@ export default function ChatPage() {
 
   const handleLeaveConfirm = () => {
     navigate('/');
+  };
+
+  const handleTyping = () => {
+    if (status !== 'connected') return;
+    
+    if (!isTypingStateRef.current) {
+      isTypingStateRef.current = true;
+      chatClient.sendTypingStart();
+    }
+
+    if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+    
+    typingTimeoutRef.current = window.setTimeout(() => {
+      isTypingStateRef.current = false;
+      chatClient.sendTypingEnd();
+    }, 2000); // Wait 2 seconds of no typing before sending 'typing_end'
   };
 
   return (
@@ -427,6 +453,7 @@ export default function ChatPage() {
                 <UserPlus className="w-4 h-4" /> Next
               </button>
             )}
+            {isPartnerTyping && <TypingIndicator />}
             
             <div className="relative">
               <button 
@@ -536,6 +563,7 @@ export default function ChatPage() {
             disabled={status !== 'connected'}
             onRequestPhoto={handleRequestPhoto}
             photoRequestDisabled={photoRequestBusy || status === 'idle'}
+            onTyping={handleTyping}
           />
         </div>
       </div>

@@ -32,5 +32,11 @@ export const usersApi = {
   getUserProfile: async (username: string) => {
     const res = await apiClient.get(`/users/${encodeURIComponent(username)}`);
     return res.data;
+  },
+
+  searchUsers: async (query: string) => {
+    // The API guide specifies the param is 'query', not 'q'
+    const response = await apiClient.get(`/users/search?query=${encodeURIComponent(query)}`);
+    return response.data; 
   }
 };

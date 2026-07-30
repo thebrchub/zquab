@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import UserCard from '../components/UserCard';
 import PaginationLoader from '../components/PaginationLoader';
@@ -37,9 +38,10 @@ export default function FriendsHub() {
       } else if (activeTab === 'blocked') {
         results = await friendsApi.getBlockedUsers(LIMIT, currentOffset);
       } else if (activeTab === 'search' && searchQuery.trim()) {
-        // API guide specifies search uses ?q= instead of ?query=
-        results = await friendsApi.searchFriends(searchQuery);
-        setHasMore(false); // Search endpoint in API isn't paginated in the guide
+        // 🛠️ SWAPPED: Now searching the entire zQuab network to find NEW people
+        // Make sure to import usersApi at the top of your file!
+        results = await usersApi.searchUsers(searchQuery);
+        setHasMore(false); 
       }
 
       setData(prev => reset ? results : [...prev, ...results]);

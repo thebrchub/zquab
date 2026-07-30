@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bug, ChevronDown, Rocket, UserCheck, UserX } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; // <-- Import Auth
+import { useAuth } from '../context/AuthContext'; 
 
 export default function DevMenu() {
   const [isOpen, setIsOpen] = useState(false);
   
-  // Bring in the auth context to read and manipulate the user state
   const { user, devMockLogin, logout } = useAuth();
 
   if (import.meta.env.PROD) return null;
 
   const handleAuthToggle = () => {
     if (user) {
-      logout(); // If already logged in (or mocked), clear it
+      logout(); 
     } else {
-      devMockLogin(); // Otherwise, inject the fake user
+      devMockLogin(); 
     }
     setIsOpen(false);
   };
@@ -41,8 +40,12 @@ export default function DevMenu() {
           <Link to="/dev/chat" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
             💬 UI: Chat Room
           </Link>
+          {/* 🛠️ Added the Profile UI Link here */}
+          <Link to="/dev/profile" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
+            👤 UI: Profile
+          </Link>
 
-          {/* 🛠️ Authentication UI Toggle */}
+          {/* Authentication UI Toggle */}
           <div className="mt-2 pt-2 border-t border-gray-700">
             <button
               onClick={handleAuthToggle}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { roomsApi } from '../api/rooms';
-import { Loader2, UserPlus, Clock, MessageSquare, ShieldBan, UserX } from 'lucide-react';
+import { Loader2, UserPlus, Clock, MessageSquare, UserX } from 'lucide-react';
 
 export default function UserProfile() {
   const { username } = useParams<{ username: string }>();
@@ -159,15 +159,11 @@ export default function UserProfile() {
     <div className="max-w-xl mx-auto w-full p-4 md:p-6 pb-20">
       <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-sm">
         
-        {/* Banner/Header background */}
+        {/* 🛠️ The ShieldBan button has been completely removed from this banner */}
         <div className="h-32 bg-gradient-to-r from-blue-500/20 to-purple-500/20 w-full relative">
-          <button className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm transition-colors" title="Block User">
-            <ShieldBan className="w-5 h-5" />
-          </button>
         </div>
         
         <div className="px-6 pb-6 relative">
-          {/* Avatar pulled up into the banner */}
           <div className="w-24 h-24 rounded-full border-4 border-[var(--card)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center absolute -top-12 shadow-lg">
             {profile.avatar_url ? (
               <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />

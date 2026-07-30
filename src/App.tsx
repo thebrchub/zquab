@@ -23,6 +23,7 @@ import ChatRoom from './pages/ChatRoom';
 import Profile from './pages/Profile';
 import UserProfile from './pages/UserProfile';
 import FriendsHub from './pages/FriendsHub';
+import SearchPage from './pages/SearchPage';
 
 // 1. Protected Route Wrapper (For standard logged-in pages)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -163,6 +164,15 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
+
+                <Route 
+  path="/search" 
+  element={
+    <ProtectedRoute>
+      <SearchPage />
+    </ProtectedRoute>
+  } 
+/>
                 
                 {/* Catch-all fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -173,6 +183,7 @@ function App() {
 <Route path="/dev/auth" element={<AuthPage />} />
 <Route path="/dev/home" element={<HomePage />} />
 <Route path="/dev/chat" element={<ChatRoom />} />
+<Route path="/dev/profile" element={<Profile />} />
             </Routes>
           </BrowserRouter>
         </WebSocketProvider>

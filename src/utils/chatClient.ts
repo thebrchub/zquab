@@ -18,6 +18,8 @@ type ChatCallbackOptions = {
   onPhotoReady?: (roomId: string, from: string, url: string, expiresAt: number) => void;
   /** Fired once the local IP-geolocation lookup resolves (or fails). */
   onLocationDetected?: (country: { name: string; code: string } | null) => void;
+  /** 🛠️ Added for typing animation */
+  onPartnerTyping?: (isTyping: boolean) => void; 
 };
 
 interface IpApiResponse {
@@ -194,6 +196,9 @@ export class ChatClient {
             const text = msg.text as string;
             const from = envelope.from as string;
             
+            // 🛠️ Turn off typing indicator when a message arrives
+            this.callbacks.onPartnerTyping?.(false);
+
             this.callbacks.onIncomingMessage({
               id: messageId,
               text,
@@ -251,6 +256,16 @@ export class ChatClient {
             if (!this.PhotoReadyProto) break;
             const ready = this.PhotoReadyProto.decode(payload) as any;
             this.callbacks.onPhotoReady?.(ready.roomId as string, ready.from as string, ready.url as string, Number(ready.expiresAt));
+            break;
+          }
+          // 🛠️ Handle incoming typing events
+          case 'typing_start':
+          case 'typing_status': {
+            this.callbacks.onPartnerTyping?.(true);
+            break;
+          }
+          case 'typing_end': {
+            this.callbacks.onPartnerTyping?.(false);
             break;
           }
         }
@@ -354,6 +369,40 @@ export class ChatClient {
     this.socket.send(payloadBuffer);
     this.knownMessageIds.add(id);
     return id;
+  }
+  
+  // 🛠️ Emit 'typing_start' to the server
+  sendTypingStart() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.currentRoomId || !this.Envelope) {
+      return;
+    }
+    try {
+      const envelope = this.Envelope.create({ type: 'typing_start', roomId: this.currentRoomId });
+      const bytes = this.Envelope.encode(envelope).finish();
+      const payloadBuffer = bytes.buffer instanceof ArrayBuffer
+        ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        : new Uint8Array(bytes).slice().buffer;
+      this.socket.send(payloadBuffer);
+    } catch (e) { 
+      console.error('Failed to send typing_start:', e); 
+    }
+  }
+
+  // 🛠️ Emit 'typing_end' to the server
+  sendTypingEnd() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.currentRoomId || !this.Envelope) {
+      return;
+    }
+    try {
+      const envelope = this.Envelope.create({ type: 'typing_end', roomId: this.currentRoomId });
+      const bytes = this.Envelope.encode(envelope).finish();
+      const payloadBuffer = bytes.buffer instanceof ArrayBuffer
+        ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        : new Uint8Array(bytes).slice().buffer;
+      this.socket.send(payloadBuffer);
+    } catch (e) { 
+      console.error('Failed to send typing_end:', e); 
+    }
   }
 
   async nextStranger() {

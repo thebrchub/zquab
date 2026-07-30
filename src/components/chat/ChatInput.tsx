@@ -8,19 +8,32 @@ interface Props {
   disabled: boolean;
   onRequestPhoto?: () => void;
   photoRequestDisabled?: boolean;
+  onTyping?: () => void; // 🛠️ Defined in props
 }
 
-export default function ChatInput({ onSend, disabled, onRequestPhoto, photoRequestDisabled }: Props) {
+export default function ChatInput({ 
+  onSend, 
+  disabled, 
+  onRequestPhoto, 
+  photoRequestDisabled,
+  onTyping // 🛠️ 1. Destructured here
+}: Props) {
   const [text, setText] = useState('');
   const [showDrawer, setShowDrawer] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+
+  // 🛠️ 2. Added this handler to fire onTyping on every keystroke
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setText(e.target.value);
+    if (onTyping) onTyping();
+  };
 
   const handleSend = () => {
     if (!text.trim() || disabled) return;
     onSend(text);
     setText('');
     setShowDrawer(false);
-    setShowEmoji(false); // Close everything on send
+    setShowEmoji(false); 
   };
 
   return (
@@ -37,8 +50,11 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
             className="absolute bottom-[calc(100%+8px)] left-2 sm:left-14 z-50 shadow-2xl rounded-2xl overflow-hidden border border-[var(--border-color)]"
           >
             <EmojiPicker 
-              theme={Theme.DARK} // Switch to Theme.LIGHT if zQuab is light mode
-              onEmojiClick={(emojiData) => setText((prev) => prev + emojiData.emoji)}
+              theme={Theme.DARK} 
+              onEmojiClick={(emojiData) => {
+                setText((prev) => prev + emojiData.emoji);
+                if (onTyping) onTyping(); // Trigger typing even when adding an emoji
+              }}
               searchDisabled={false}
               skinTonesDisabled
             />
@@ -98,7 +114,7 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
           <button
             onClick={() => {
               setShowDrawer(!showDrawer);
-              setShowEmoji(false); // Close emojis if opening attachments
+              setShowEmoji(false); 
             }}
             disabled={disabled}
             className={`p-2.5 rounded-full transition-colors flex-shrink-0 ${
@@ -118,7 +134,7 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
           <button 
             onClick={() => {
               setShowEmoji(!showEmoji);
-              setShowDrawer(false); // Close attachments if opening emojis
+              setShowDrawer(false); 
             }}
             disabled={disabled}
             className={`p-1.5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
@@ -131,7 +147,7 @@ export default function ChatInput({ onSend, disabled, onRequestPhoto, photoReque
           <input
             type="text"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleChange} // 🛠️ 3. Updated to use the new handler
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             disabled={disabled}
             placeholder={disabled ? "Waiting..." : "Type a message..."}

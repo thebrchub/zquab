@@ -8,9 +8,12 @@ export default function Navbar() {
   const location = useLocation();
   const isChatPage = location.pathname === '/chat';
   
-  const { user, loginAsGuest } = useAuth();
+  // 🛠️ THE FIX: Grab isLoading from AuthContext to prevent the flash
+  // We alias it to 'isAuthLoading' to not conflict with the local 'isConnecting' state
+  const { user, loginAsGuest, isLoading: isAuthLoading } = useAuth();
+  
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false); // Renamed from 'loading'
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isFullUser = user && !user.is_guest;
@@ -26,7 +29,7 @@ export default function Navbar() {
       return;
     }
 
-    setLoading(true);
+    setIsConnecting(true);
     try {
       await loginAsGuest();
       navigate('/chat');
@@ -35,7 +38,7 @@ export default function Navbar() {
       console.error('Failed to authenticate:', err);
       alert('Failed to connect. Please try again.');
     } finally {
-      setLoading(false);
+      setIsConnecting(false);
     }
   };
 
@@ -64,7 +67,7 @@ export default function Navbar() {
           {/* Right: Controls & Routing */}
           <div className="flex items-center gap-2 sm:gap-6 ml-auto z-10">
             
-            {/* Desktop Navigation Links (Now visible on ALL pages) */}
+            {/* Desktop Navigation Links */}
             <div className="hidden md:flex items-center gap-8 mr-4">
               <Link to="/about" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
                 <Info className="w-5 h-5" /> About
@@ -75,7 +78,10 @@ export default function Navbar() {
 
               <div className="h-8 w-px bg-[var(--border-color)] mx-1"></div>
 
-              {isFullUser ? (
+              {/* 🛠️ Prevent Login flash: Show a skeleton loader if auth is still resolving */}
+              {isAuthLoading ? (
+                <div className="w-24 h-8 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
+              ) : isFullUser ? (
                 <>
                   <Link to="/home" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
                     <MessageSquare className="w-5 h-5" /> Inbox
@@ -101,24 +107,32 @@ export default function Navbar() {
               >
                 <Home className="w-5 h-5" /> Home
               </Link>
+            ) : isAuthLoading ? (
+              // 🛠️ Skeleton loader for the Start Chat button to prevent layout shifts
+              <div className="hidden md:block w-32 h-11 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
             ) : (
               !isFullUser && (
                 <button
                   onClick={handleStartChatting}
-                  disabled={loading}
+                  disabled={isConnecting}
                   className="hidden md:flex items-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white px-7 py-3 rounded-full font-bold transition-all duration-200 active:scale-95 disabled:opacity-70 shadow-lg shadow-blue-500/20 text-base whitespace-nowrap"
                 >
-                  {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+                  {isConnecting && <Loader2 className="w-5 h-5 animate-spin" />}
                   Start Chat
                 </button>
               )
             )}
 
-            {/* Mobile-Only Icons (Now visible on ALL pages) */}
+            {/* Mobile-Only Icons */}
             <div className="md:hidden flex items-center gap-2">
-              <Link to={isFullUser ? "/home" : "/auth"} className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95">
-                {isFullUser ? <MessageSquare className="w-6 h-6" /> : <User className="w-6 h-6" />}
-              </Link>
+              {/* 🛠️ Skeleton loader for mobile user icon */}
+              {isAuthLoading ? (
+                <div className="w-10 h-10 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
+              ) : (
+                <Link to={isFullUser ? "/home" : "/auth"} className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95">
+                  {isFullUser ? <MessageSquare className="w-6 h-6" /> : <User className="w-6 h-6" />}
+                </Link>
+              )}
               
               <button 
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
@@ -142,20 +156,23 @@ export default function Navbar() {
             <BookOpen className="w-6 h-6 text-[var(--text-muted)]" /> Blog
           </Link>
           
-          {isFullUser && (
+          {/* 🛠️ Handle Mobile Dropdown links based on auth loading state */}
+          {isAuthLoading ? (
+             <div className="w-full h-14 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-xl my-2"></div>
+          ) : isFullUser && (
             <Link to="/profile" className="flex items-center gap-3 p-4 text-[var(--text-main)] font-bold text-lg rounded-xl hover:bg-[var(--background)] transition-colors">
               <User className="w-6 h-6 text-[var(--text-muted)]" /> Profile
             </Link>
           )}
 
-          {!isFullUser && !isChatPage && (
+          {!isAuthLoading && !isFullUser && !isChatPage && (
             <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
               <button
                 onClick={handleStartChatting}
-                disabled={loading}
+                disabled={isConnecting}
                 className="w-full flex justify-center items-center gap-2 bg-[#3B82F6] active:bg-blue-600 text-white px-6 py-4 rounded-xl font-bold transition-all disabled:opacity-70 shadow-lg shadow-blue-500/20 text-lg"
               >
-                {loading && <Loader2 className="w-6 h-6 animate-spin" />}
+                {isConnecting && <Loader2 className="w-6 h-6 animate-spin" />}
                 Start Chat
               </button>
             </div>
