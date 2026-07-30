@@ -109,7 +109,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       // 🛠️ Create and encode the outer envelope
       const envelope = Envelope.create({
         type,
-        roomId,
+        room_id: roomId,
         to,
         payload: payloadBytes,
         ts: Date.now(),

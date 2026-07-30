@@ -100,7 +100,7 @@ export default function ChatRoom({
   useEffect(() => {
     if (isDevMode || !lastMessage || !roomId) return;
     
-    if (lastMessage.room_id === roomId) {
+    if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
       if (lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
         const newMsg = {
           id: lastMessage.id,
