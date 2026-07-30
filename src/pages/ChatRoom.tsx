@@ -225,7 +225,7 @@ export default function ChatRoom({
   }
 
   return (
-    <div className="flex flex-col bg-[var(--background)] w-full h-full overflow-hidden relative">
+  <div className="flex-1 flex flex-col bg-[var(--background)] w-full h-full overflow-hidden relative">
       
       <div className="flex-shrink-0 flex items-center justify-between p-3 sm:p-4 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe">
         <div className="flex items-center gap-2 sm:gap-3">

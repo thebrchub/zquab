@@ -113,7 +113,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex w-full h-full flex-1 bg-[var(--background)] overflow-hidden">
+  <div className="absolute inset-0 flex bg-[var(--background)] overflow-hidden">
       
       {/* 📱 / 💻 LEFT SIDEBAR (Inbox / Requests) */}
       <div className={`flex-col h-full bg-[var(--background)] border-r border-[var(--border-color)] transition-all duration-300 ${
