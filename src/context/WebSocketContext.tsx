@@ -7,6 +7,7 @@ const root = new protobuf.Root();
 protobuf.parse(chatProtoSrc, root);
 const Envelope = root.lookupType('chatpb.Envelope');
 const ChatMessageProto = root.lookupType('chatpb.ChatMessage');
+const ReceiptProto = root.lookupType ? root.lookupType('chatpb.Receipt') : null;
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -42,28 +43,52 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     ws.onmessage = (event) => {
       try {
         if (!(event.data instanceof ArrayBuffer)) return;
-        
-        // 🛠️ Decode the outer envelope
+
+        // Decode the outer envelope
         const bytes = new Uint8Array(event.data);
         const envelope = Envelope.decode(bytes) as any;
-        
-        let decodedPayload = null;
-        
-        // 🛠️ If there is text content, decode the inner ChatMessage payload
+
+        let decodedPayload: any = envelope.payload;
+
+        // If there's an inner payload, try to decode according to the envelope type
         if (envelope.payload && envelope.payload.length > 0) {
           try {
-            decodedPayload = ChatMessageProto.decode(envelope.payload);
+            const t: string = envelope.type || '';
+
+            // Common server->client chat message variants contain a ChatMessage
+            if (t === 'message_delivered' || t === 'message_sent_confirm' || t === 'chat_message') {
+              decodedPayload = ChatMessageProto.decode(envelope.payload);
+            }
+            // Receipt-like events use the Receipt proto
+            else if (t === 'message_read' || t === 'message_delivered_receipt' || t === 'message_receipt' || t === 'receipt') {
+              if (ReceiptProto) {
+                try {
+                  decodedPayload = ReceiptProto.decode(envelope.payload);
+                } catch (e) {
+                  decodedPayload = envelope.payload;
+                }
+              }
+            }
+            // Fallback: try ChatMessage decode, otherwise leave raw bytes
+            else {
+              try {
+                decodedPayload = ChatMessageProto.decode(envelope.payload);
+              } catch (e) {
+                decodedPayload = envelope.payload;
+              }
+            }
           } catch (e) {
-            console.warn("Could not decode inner payload", e);
+            console.warn('Could not decode inner payload', e);
+            decodedPayload = envelope.payload;
           }
         }
-        
-        // Pass it to state so ChatRoom.tsx can read lastMessage.payload.text
+
+        // Expose both the decoded payload and the raw envelope for consumers
         setLastMessage({
           ...envelope,
-          payload: decodedPayload || envelope.payload
+          payload: decodedPayload,
         });
-        
+
       } catch (err) {
         console.error('Failed to decode WS message:', err);
       }
