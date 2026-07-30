@@ -207,7 +207,7 @@ export default function ChatRoom({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-[var(--background)] z-50">
+      <div className="w-full h-full flex items-center justify-center bg-[var(--background)]">
         <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
       </div>
     );
@@ -215,7 +215,7 @@ export default function ChatRoom({
 
   if (error) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center p-6 text-center bg-[var(--background)] z-50">
+      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[var(--background)]">
         <p className="text-red-500 font-bold mb-4">{error}</p>
         <button onClick={() => navigate('/home')} className="px-6 py-2 bg-[var(--card)] border border-[var(--border-color)] rounded-full text-[var(--text-main)] active:scale-95">
           Go Back
@@ -225,7 +225,7 @@ export default function ChatRoom({
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[var(--background)] z-50 w-full h-[100dvh] overflow-hidden">
+    <div className="flex flex-col bg-[var(--background)] w-full h-full overflow-hidden relative">
       
       <div className="flex-shrink-0 flex items-center justify-between p-3 sm:p-4 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe">
         <div className="flex items-center gap-2 sm:gap-3">

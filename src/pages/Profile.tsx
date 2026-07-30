@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Loader2, Camera, Save, User, AtSign, AlignLeft, 
   Users, MessageSquare, Edit2, X, MapPin, Calendar, Activity,
-  Globe, Shield
+  Globe, Shield, LogOut // 🛠️ Added LogOut icon
 } from 'lucide-react';
 
 const GENDER_OPTIONS = ['Any', 'Male', 'Female', 'Other'];
@@ -78,6 +78,26 @@ export default function Profile() {
     }
   };
 
+  // 🛠️ The Logout Handler
+  const handleLogout = async () => {
+    try {
+      // Assuming your VITE_API_BASE_URL is set, otherwise defaulting to /api/v1
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+      await fetch(`${baseUrl}/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include' // 🛠️ Crucial for clearing httpOnly cookies
+      });
+      
+      // Hard redirect to clear React context and state entirely
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Failed to log out:', err);
+      // Fallback redirect even if the network call failed
+      window.location.href = '/';
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-[50vh]">
@@ -107,7 +127,6 @@ export default function Profile() {
   }
 
   return (
-    // 🛠️ UX FIX: Expanded the max-width to 7xl so it breathes better on desktop
     <div className="max-w-7xl mx-auto w-full p-4 md:p-8 xl:p-12 pb-20">
       
       <div className="flex justify-between items-center mb-8">
@@ -125,7 +144,7 @@ export default function Profile() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 xl:gap-12">
         
-        {/* LEFT COLUMN: Profile Display or Edit Form (Takes up 2/3 of space) */}
+        {/* LEFT COLUMN: Profile Display or Edit Form */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 sm:p-10 shadow-sm">
             
@@ -282,7 +301,6 @@ export default function Profile() {
         {/* RIGHT COLUMN: Action Cards */}
         <div className="lg:col-span-1 space-y-6">
           
-          {/* 🛠️ UX FIX: Prominent Stranger Chat Feature Card */}
           <div className="bg-gradient-to-br from-[#3B82F6] to-indigo-600 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden group">
             <div className="absolute -top-4 -right-4 opacity-10 transform group-hover:scale-110 transition-transform duration-500 pointer-events-none">
               <MessageSquare className="w-40 h-40" />
@@ -307,7 +325,7 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Secondary Action: Friends Hub */}
+          {/* Secondary Action: Friends Hub & Logout */}
           <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 shadow-sm">
             <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wider mb-4">Your Network</h3>
             <button
@@ -319,12 +337,23 @@ export default function Profile() {
                 Manage Friends
               </div>
             </button>
+
+            {/* 🛠️ Added the beautiful destructive Logout Button */}
+            <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wider mb-4 mt-8">Account</h3>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-between px-5 py-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 font-bold hover:bg-red-500 hover:text-white transition-all active:scale-[0.98] group"
+            >
+              <div className="flex items-center gap-3">
+                <LogOut className="w-5 h-5 group-hover:text-white transition-colors" />
+                Log Out
+              </div>
+            </button>
           </div>
 
         </div>
       </div>
 
-      {/* 🛠️ UX/SEO FIX: Blog-style article section completely outside the constraints */}
       <article className="mt-20 max-w-4xl mx-auto border-t border-[var(--border-color)] pt-16">
         <header className="mb-10 text-center lg:text-left">
           <h2 className="text-3xl font-black text-[var(--text-main)] mb-4">Welcome to the zQuab Community</h2>
