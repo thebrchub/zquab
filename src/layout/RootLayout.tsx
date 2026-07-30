@@ -23,7 +23,7 @@ export default function RootLayout() {
       
       <Navbar />
       
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col min-h-0">
         <Outlet />
       </main>
       
