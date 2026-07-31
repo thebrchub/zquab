@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Loader2, User, ChevronRight, X, Copy, CheckCircle2, Users, HelpCircle } from 'lucide-react';
+import { Search, Loader2, User, ChevronRight, X, Copy, CheckCircle2 } from 'lucide-react';
 import { usersApi } from '../api/users'; 
 import { useAuth } from '../context/AuthContext';
 
@@ -56,12 +56,21 @@ export default function SearchPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto w-full p-4 md:p-6 pb-20">
-      <h1 className="text-3xl font-black text-[var(--text-main)] mb-6 tracking-tight">Find Someone</h1>
+    <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pt-12 pb-24">
+      
+      {/* 1. Header (Typography & Whitespace driving hierarchy) */}
+      <div className="mb-10 text-center sm:text-left">
+        <h1 className="text-3xl sm:text-4xl font-black text-[var(--text-main)] tracking-tight mb-2">
+          Find Someone
+        </h1>
+        <p className="text-lg text-[var(--text-muted)] font-medium">
+          Search for friends using their unique username.
+        </p>
+      </div>
 
-      {/* Search Input */}
-      <div className="relative mb-8">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+      {/* 2. The Tool (Search Bar) */}
+      <div className="relative mb-12">
+        <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
           <Search className="w-6 h-6 text-[var(--text-muted)]" />
         </div>
         <input
@@ -82,21 +91,21 @@ export default function SearchPage() {
         )}
       </div>
 
-      {/* Results Area */}
+      {/* 3. Dynamic Area (Results OR Minimal Empty State) */}
       <div className="space-y-3">
         {error && (
-          <div className="p-4 bg-red-500/10 text-red-500 rounded-xl text-center text-sm font-medium border border-red-500/20">
+          <div className="py-4 text-red-500 text-center text-sm font-medium">
             {error}
           </div>
         )}
 
         {isSearching ? (
-          <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)]">
-            <Loader2 className="w-10 h-10 text-[#3B82F6] animate-spin mb-4" />
-            <p className="font-medium animate-pulse">Searching network...</p>
+          <div className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+            <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin mb-4" />
           </div>
         ) : query.trim() !== '' ? (
-          // HAS QUERY BUT EITHER FOUND OR NOT FOUND
+          
+          // SEARCH RESULTS (Takes over 85% of focus when active)
           results.length > 0 ? (
             results.map((result) => (
               <Link 
@@ -119,68 +128,48 @@ export default function SearchPage() {
               </Link>
             ))
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)] bg-[var(--card)] border border-[var(--border-color)] rounded-3xl border-dashed">
-              <div className="w-16 h-16 bg-[var(--background)] rounded-full flex items-center justify-center mb-4 border border-[var(--border-color)]">
-                <Search className="w-8 h-8 opacity-50" />
-              </div>
-              <p className="text-lg font-bold text-[var(--text-main)]">No users found</p>
-              <p className="text-sm mt-2 text-center max-w-xs leading-relaxed">
-                Make sure the username is spelled correctly. Usernames are unique.
-              </p>
+            <div className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]">
+              <p className="text-lg font-bold text-[var(--text-main)] mb-1">No users found</p>
+              <p className="text-base text-center">Make sure the username is spelled correctly.</p>
             </div>
           )
         ) : (
-          // 🛠️ THE PREMIUM EMPTY STATE (When no query is typed)
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-2">
-            
-            {/* Search Tips Card */}
-            <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-3xl p-6 shadow-sm">
-              <div className="w-12 h-12 bg-blue-500/10 text-[#3B82F6] rounded-2xl flex items-center justify-center mb-5">
-                <HelpCircle className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-[var(--text-main)] mb-3">How Search Works</h3>
-              <ul className="space-y-2.5 text-sm text-[var(--text-muted)] font-medium">
-                <li className="flex items-start gap-2">
-                  <span className="text-[#3B82F6] mt-0.5">•</span> 
-                  Search by exact username.
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#3B82F6] mt-0.5">•</span> 
-                  Usernames contain no spaces.
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#3B82F6] mt-0.5">•</span> 
-                  Example: <span className="bg-[var(--background)] px-2 py-0.5 rounded-md border border-[var(--border-color)] text-[var(--text-main)]">rajmillennium</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Profile Link Card */}
-            <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-3xl p-6 shadow-sm flex flex-col">
-              <div className="w-12 h-12 bg-purple-500/10 text-purple-500 rounded-2xl flex items-center justify-center mb-5">
-                <Users className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-[var(--text-main)] mb-2">Can't find them?</h3>
-              <p className="text-sm text-[var(--text-muted)] mb-5 font-medium leading-relaxed flex-1">
-                Have them share their profile link with you directly, or share yours!
-              </p>
+          
+          // PREMIUM EMPTY STATE (No bulky cards, just typography and whitespace)
+          <div className="animate-in fade-in slide-in-from-bottom-4 px-2 sm:px-4">
+            <div className="space-y-10">
               
-              <button 
-                onClick={handleCopyLink}
-                disabled={!user || user.is_guest}
-                className="w-full flex items-center justify-center gap-2 bg-[var(--background)] border border-[var(--border-color)] hover:border-[#3B82F6] text-[var(--text-main)] hover:text-[#3B82F6] py-3 rounded-xl font-bold transition-all active:scale-95 disabled:opacity-50 disabled:hover:border-[var(--border-color)] disabled:hover:text-[var(--text-main)]"
-              >
-                {copied ? (
-                  <><CheckCircle2 className="w-4 h-4 text-green-500" /> Copied!</>
-                ) : (
-                  <><Copy className="w-4 h-4" /> Copy My Link</>
-                )}
-              </button>
-              {(!user || user.is_guest) && (
-                <p className="text-[10px] text-center mt-2 text-[var(--text-muted)]">Log in to share your profile.</p>
-              )}
-            </div>
+              {/* Minimal Rule Set */}
+              <div className="text-center sm:text-left">
+                <p className="text-[var(--text-main)] text-lg font-bold mb-1">Search by exact username.</p>
+                <p className="text-[var(--text-muted)] text-base">
+                  Usernames don't contain spaces. Example: <span className="text-[var(--text-main)] font-semibold">rajmillennium</span>
+                </p>
+              </div>
 
+              <hr className="border-[var(--border-color)] opacity-60" />
+
+              {/* Minimal Action Row */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 text-center sm:text-left">
+                <div>
+                  <p className="text-[var(--text-main)] text-lg font-bold mb-1">Can't find someone?</p>
+                  <p className="text-[var(--text-muted)] text-base">Ask them to share their profile link.</p>
+                </div>
+                
+                <button 
+                  onClick={handleCopyLink}
+                  disabled={!user || user.is_guest}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--card)] hover:bg-[var(--border-color)] border border-[var(--border-color)] text-[var(--text-main)] rounded-full font-bold transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {copied ? (
+                    <><CheckCircle2 className="w-5 h-5 text-green-500" /> Copied</>
+                  ) : (
+                    <><Copy className="w-5 h-5" /> Copy My Link</>
+                  )}
+                </button>
+              </div>
+
+            </div>
           </div>
         )}
       </div>

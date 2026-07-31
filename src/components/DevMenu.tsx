@@ -40,9 +40,12 @@ export default function DevMenu() {
           <Link to="/dev/chat" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
             💬 UI: Chat Room
           </Link>
-          {/* 🛠️ Added the Profile UI Link here */}
           <Link to="/dev/profile" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
             👤 UI: Profile
+          </Link>
+          {/* 🛠️ Added the Search UI Link here */}
+          <Link to="/search" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
+            🔍 UI: Search
           </Link>
 
           {/* Authentication UI Toggle */}

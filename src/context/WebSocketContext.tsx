@@ -24,6 +24,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const connect = () => {
+    if (import.meta.env.DEV || window.location.hostname === 'localhost') {
+      console.warn('🛠️ DEV MODE: WebSocket connection disabled to prevent backend spam.');
+      return; 
+    }
     const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'wss://api.zquab.com';
     const wsUrl = `${WS_BASE}/ws`;
     

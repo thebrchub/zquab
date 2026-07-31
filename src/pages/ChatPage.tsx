@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import ReactCountryFlag from 'react-country-flag';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
-import TypingIndicator from '../components/chat/TypingIndicator'; // 🛠️ Imported the indicator
-import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, HeartHandshake, ImageMinus, UserX } from 'lucide-react';
+import TypingIndicator from '../components/chat/TypingIndicator';
+import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, HeartHandshake, ImageMinus, UserX, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
@@ -63,18 +62,27 @@ export default function ChatPage() {
   const [status, setStatus] = useState<Status>('idle');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
+  
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null); 
   
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [rulesAgreed, setRulesAgreed] = useState(false);
   
   const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
+  
+  // 🛠️ Photo Request States
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
 
-  // 🛠️ Typing State
+  const [partnerUsername, setPartnerUsername] = useState<string | undefined>(undefined);
+  const [partnerGender, setPartnerGender] = useState<string | undefined>(undefined);
+
+  const [friendRequestSent, setFriendRequestSent] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingStateRef = useRef(false);
@@ -83,6 +91,33 @@ export default function ChatPage() {
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
+
+  const isDev = import.meta.env.DEV;
+
+  const handleMockConnect = (type: 'guest' | 'registered') => {
+    setStatus('searching');
+    setTimeout(() => {
+      setStatus('connected');
+      setPartnerCountry({ name: 'United States', code: 'US' });
+      
+      setPartnerUsername(type === 'registered' ? 'shadow_ninja' : undefined);
+      setPartnerGender(type === 'registered' ? 'Male' : undefined);
+      
+      setFriendRequestSent(false);
+      setSystemMessages(prev => [...prev, { id: Date.now().toString(), text: 'You are now chatting with a random stranger.' }]);
+    }, 1500);
+  };
+
+  const handleMockReceiveMessage = () => {
+    if (status !== 'connected') return;
+    setIsPartnerTyping(true);
+    setTimeout(() => {
+      setIsPartnerTyping(false);
+      setMessages(prev => [...prev, { 
+        id: Date.now().toString(), text: 'Hey! This is a mock message from the frontend.', isOwn: false 
+      }]);
+    }, 1500);
+  };
 
   useEffect(() => {
     const hasAcceptedRules = sessionStorage.getItem('zquab_rules_accepted');
@@ -105,20 +140,17 @@ export default function ChatPage() {
   };
 
   const chatClient = useMemo(() => {
+    if (isDev) return null; 
+    
     return new ChatClient({
       onStatusChange: setStatus,
-      onIncomingMessage: (message) => {
-        setMessages((prev) => [...prev, message]);
-      },
-      onSystemMessage: (text) => {
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text }]);
-      },
+      onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
+      onSystemMessage: (text) => setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text }]),
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
         }
-
         const normalized = partnerLocation.trim().replace(/^"|"$/g, '');
         if (/^[A-Za-z]{2}$/.test(normalized)) {
           setPartnerCountry({ name: normalized.toUpperCase(), code: normalized.toUpperCase() });
@@ -126,66 +158,79 @@ export default function ChatPage() {
           setPartnerCountry({ name: normalized, code: '' });
         }
       },
-      onLocationDetected: (country) => {
-        setUserCountry(country);
-      },
-      // 🛠️ Syncing the state with the WebSocket callback
-      onPartnerTyping: (isTyping) => {
-        setIsPartnerTyping(isTyping);
-      },
+      onLocationDetected: (country) => setUserCountry(country),
+      onPartnerTyping: (isTyping) => setIsPartnerTyping(isTyping),
       onDisconnected: () => {
         setStatus('disconnected');
-        setIsPartnerTyping(false); // Reset typing on disconnect
+        setIsPartnerTyping(false); 
       },
-      onSocketOpen: () => {
-        setSystemMessages((prev) => [...prev, { id: 'sys-open', text: 'Connected to the chat server.' }]);
-      },
-      onSocketClose: () => {
-        setSystemMessages((prev) => [...prev, { id: 'sys-close', text: 'Socket closed. Reconnecting...' }]);
-      },
-      onError: (error) => {
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Error: ${error}` }]);
-      },
+      onSocketOpen: () => setSystemMessages((prev) => [...prev, { id: 'sys-open', text: 'Connected to the chat server.' }]),
+      onSocketClose: () => setSystemMessages((prev) => [...prev, { id: 'sys-close', text: 'Socket closed. Reconnecting...' }]),
+      onError: (error) => setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: `Error: ${error}` }]),
       onPhotoRequest: () => {
         setIncomingPhotoRequest(true);
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: 'Stranger wants to see a photo of you.' }]);
+        setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: 'Stranger wants to see a photo of you.' }]);
       },
       onPhotoResponse: (_roomId, _from, accepted) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        setSystemMessages((prev) => [...prev, {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.',
-        }]);
+        setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.'}]);
       },
-      onPhotoReady: (_roomId, _from, url, _expiresAt) => {
+      onPhotoReady: (_roomId, _from, url) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        setMessages((prev) => [...prev, {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          text: '',
-          isOwn: false,
-          imageUrl: url,
-        }]);
+        setMessages((prev) => [...prev, { id: `${Date.now()}`, text: '', isOwn: false, imageUrl: url}]);
       },
     });
-  }, []);
+  }, [isDev]);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      chatClient.leaveQueueSilently(true);
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (status === 'connected') {
+        e.preventDefault();
+        e.returnValue = ''; 
+      } else {
+        chatClient?.leaveQueueSilently(true);
+      }
     };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      chatClient.leaveQueueSilently();
-      chatClient.shutdown();
+      chatClient?.leaveQueueSilently();
+      chatClient?.shutdown();
       clearPhotoRequestTimeout();
     };
-  }, [chatClient]);
+  }, [chatClient, status]); 
 
-  // Ensure scroll stays at the bottom when typing indicators appear/disappear
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (status !== 'connected') return;
+
+      const target = (e.target as HTMLElement).closest('a');
+      
+      if (target) {
+        if (target.target === '_blank') return; 
+
+        e.preventDefault();
+        e.stopPropagation(); 
+
+        const href = target.getAttribute('href');
+        if (href) {
+          setPendingRoute(href);
+          setShowLeaveConfirm(true); 
+        }
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick, { capture: true });
+
+    return () => {
+      document.removeEventListener('click', handleGlobalClick, { capture: true });
+    };
+  }, [status]);
+
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
@@ -193,82 +238,90 @@ export default function ChatPage() {
   }, [messages, status, systemMessages, isPartnerTyping]);
 
   const handleStartChat = () => {
+    if (isDev) {
+      handleMockConnect('guest');
+      return;
+    }
     setStatus('searching');
-    chatClient.start().catch((error) => {
-      setSystemMessages((prev) => [...prev, { id: 'sys-error', text: 'Unable to start chat client.' }]);
-      console.error(error);
-    });
+    chatClient?.start().catch((error) => console.error(error));
   };
 
   const handleSend = (text: string) => {
     if (status !== 'connected') return;
     
-    // Cancel typing immediately upon sending
     if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
     isTypingStateRef.current = false;
-    chatClient.sendTypingEnd();
+    chatClient?.sendTypingEnd();
 
-    const temporaryId = chatClient.sendChatMessage(text);
+    if (isDev) {
+      setMessages((prev) => [...prev, { id: Date.now().toString(), text, isOwn: true }]);
+      return;
+    }
+    const temporaryId = chatClient?.sendChatMessage(text);
     if (temporaryId) {
       setMessages((prev) => [...prev, { id: temporaryId, text, isOwn: true }]);
     }
   };
 
-  // 🛠️ Debounced Outgoing Typing Handler
   const handleTyping = () => {
-    if (status !== 'connected') return;
+    if (status !== 'connected' || isDev) return; 
     
     if (!isTypingStateRef.current) {
       isTypingStateRef.current = true;
-      chatClient.sendTypingStart();
+      chatClient?.sendTypingStart();
     }
-
     if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
     
     typingTimeoutRef.current = window.setTimeout(() => {
       isTypingStateRef.current = false;
-      chatClient.sendTypingEnd();
+      chatClient?.sendTypingEnd();
     }, 2000); 
   };
 
   const handleNext = () => {
-    chatClient.nextStranger().catch((error) => {
-      setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to find next stranger: ${error}` }]);
-    });
+    if (isDev) {
+      setMessages([]);
+      handleMockConnect(Math.random() > 0.5 ? 'guest' : 'registered');
+      setShowMobileMenu(false); 
+      return;
+    }
+
+    chatClient?.nextStranger().catch(() => {});
     setMessages([]);
     setShowMobileMenu(false);
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
-    setIsPartnerTyping(false); // Clear typing on next
+    setIsPartnerTyping(false);
     clearPhotoRequestTimeout();
   };
 
-  const PHOTO_REQUEST_TIMEOUT_MS = 30_000;
-
   const handleRequestPhoto = () => {
     if (user?.is_guest) {
-      alert("You need to create a full account to request and send photos!");
+      setShowLoginPrompt(true);
       return;
     }
+    if (isDev) {
+      setSystemMessages(prev => [...prev, { id: Date.now().toString(), text: 'Mock: Photo request sent.' }]);
+      return;
+    }
+
     setPhotoRequestBusy(true);
-    chatClient.requestPhoto()
+    chatClient?.requestPhoto()
       .then(() => {
         clearPhotoRequestTimeout();
         photoRequestTimeoutRef.current = window.setTimeout(() => {
           photoRequestTimeoutRef.current = null;
           setPhotoRequestBusy(false);
-          setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: "Stranger didn't respond to your photo request." }]);
-        }, PHOTO_REQUEST_TIMEOUT_MS);
+          setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: "Stranger didn't respond." }]);
+        }, 30_000);
       })
-      .catch((error) => {
-        setPhotoRequestBusy(false);
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text: `Unable to request a photo: ${error}` }]);
-      });
+      .catch(() => setPhotoRequestBusy(false));
   };
 
+  // 🛠️ Restored Missing Logic for handling photo requests
   const handleDeclinePhotoRequest = () => {
     setIncomingPhotoRequest(false);
-    chatClient.declinePhotoRequest().catch(() => {});
+    chatClient?.declinePhotoRequest().catch(() => {});
   };
 
   const handleAcceptPhotoRequest = () => {
@@ -282,261 +335,240 @@ export default function ChatPage() {
     if (!file) return;
 
     try {
-      setSystemMessages((prev) => [...prev, { id: `sys-compressing-${Date.now()}`, text: 'Optimizing photo...' }]);
-      
       const webpFile = await compressImageToWebP(file);
-      await chatClient.sharePhoto(webpFile);
-      
+      if (!isDev) await chatClient?.sharePhoto(webpFile);
       const previewUrl = URL.createObjectURL(webpFile);
-      setMessages((prev) => [...prev, {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        text: '',
-        isOwn: true,
-        imageUrl: previewUrl,
-      }]);
+      setMessages((prev) => [...prev, { id: `${Date.now()}`, text: '', isOwn: true, imageUrl: previewUrl }]);
     } catch (error) {
-      setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: `Failed to process/send photo: ${error}` }]);
+      console.error(error);
     }
   };
 
+  const handleAddFriend = () => {
+    if (!user || user.is_guest) {
+      setShowLoginPrompt(true); 
+      return;
+    }
+    setFriendRequestSent(true);
+  };
+
   const handleLeaveConfirm = () => {
-    navigate('/');
+    if (pendingRoute) {
+      navigate(pendingRoute);
+    } else {
+      navigate('/');
+    }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)]">
+    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)] relative">
       
-      {/* Rules & Safety Modal */}
+      {isDev && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 backdrop-blur-md px-4 py-2 rounded-full shadow-lg">
+          <span className="text-xs font-bold text-purple-400 uppercase tracking-wider mr-2">Dev</span>
+          <button onClick={() => handleMockConnect('guest')} className="text-xs bg-purple-500 text-white px-2 py-1 rounded">Guest</button>
+          <button onClick={() => handleMockConnect('registered')} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded">User</button>
+          <button onClick={handleMockReceiveMessage} disabled={status !== 'connected'} className="text-xs bg-green-500 text-white px-2 py-1 rounded disabled:opacity-50">Msg</button>
+        </div>
+      )}
+
+      {/* MOBILE SIDEBAR DRAWER */}
       <AnimatePresence>
-        {showRulesModal && (
+        {showMobileMenu && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileMenu(false)}
+              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            />
+            
+            <motion.div
+              initial={{ x: '100%' }} 
+              animate={{ x: 0 }} 
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="md:hidden fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[101] shadow-2xl flex flex-col border-l border-[var(--border-color)]"
+            >
+              <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)]">
+                <h3 className="font-bold text-[var(--text-main)]">Dashboard</h3>
+                <button 
+                  onClick={() => setShowMobileMenu(false)} 
+                  className="p-2 bg-[var(--card)] rounded-full border border-[var(--border-color)] text-[var(--text-main)] active:scale-95 transition-transform"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 pb-8">
+                <ConnectionCard 
+                  status={status} 
+                  onNext={handleNext} 
+                  userCountry={userCountry} 
+                  partnerCountry={partnerCountry} 
+                  partnerUsername={partnerUsername}
+                  partnerGender={partnerGender}
+                  onAddFriend={handleAddFriend}
+                  friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
+                  onLeaveConfirm={() => setShowLeaveConfirm(true)} 
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Leave Chat Warning Modal */}
+      <AnimatePresence>
+        {showLeaveConfirm && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+            className="absolute inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           >
             <motion.div 
-              initial={{ scale: 0.95, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.95, y: 20, opacity: 0 }}
-              className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center"
             >
-              <h3 className="text-2xl md:text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
-              <p className="text-[var(--text-muted)] text-center text-sm mb-6">Please read and accept before connecting.</p>
-              
-              <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <HeartHandshake className="w-5 h-5 text-[#3B82F6] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-[var(--text-main)] text-sm mb-1">Treat Strangers with Respect</h4>
-                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">No bullying, racism, harassment, or abusive language. We have a zero-tolerance policy for abuse.</p>
-                  </div>
-                </div>
-                
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <ImageMinus className="w-5 h-5 text-[#3B82F6] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-[var(--text-main)] text-sm mb-1">Strict Photo Policy</h4>
-                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">You cannot send photos directly. You can only request them. To send a photo, the stranger must request it from you first.</p>
-                  </div>
-                </div>
-                
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <UserX className="w-5 h-5 text-[#3B82F6] mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-bold text-[var(--text-main)] text-sm mb-1">Protect Your Privacy</h4>
-                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">Do not share sensitive personal details, social media handles, or contact information with strangers.</p>
-                  </div>
-                </div>
+              <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-red-500/20">
+                <LogOut className="w-8 h-8" />
               </div>
-
-              <label 
-                onClick={() => setRulesAgreed(!rulesAgreed)} 
-                className="flex items-center gap-3 cursor-pointer mb-6 p-2 rounded-lg hover:bg-[var(--border-color)]/50 transition-colors group"
-              >
-                <div className={`w-6 h-6 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${rulesAgreed ? 'bg-[#3B82F6] border-[#3B82F6]' : 'border-[var(--text-muted)] bg-[var(--background)] group-hover:border-[#3B82F6]'}`}>
-                  {rulesAgreed && <Check className="w-4 h-4 text-white" />}
-                </div>
-                <span className="text-sm text-[var(--text-muted)] leading-tight select-none">
-                  I agree to the Community Rules and promise to treat others with respect.
-                </span>
-              </label>
-
-              <button 
-                onClick={handleAcceptRules}
-                disabled={!rulesAgreed}
-                className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold transition-all flex-shrink-0 shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none hover:bg-blue-600 disabled:hover:bg-[#3B82F6] active:scale-95 disabled:active:scale-100"
-              >
-                I Understand & Agree
-              </button>
+              <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Leave Chat?</h3>
+              <p className="text-[var(--text-muted)] mb-8 leading-relaxed">
+                Are you sure you want to leave? This chat will be gone forever and cannot be recovered.
+              </p>
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={handleLeaveConfirm}
+                  className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors"
+                >
+                  Yes, Leave Chat
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowLeaveConfirm(false);
+                    setPendingRoute(null);
+                  }}
+                  className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] rounded-none md:rounded-2xl border-0 md:border md:border-[var(--border-color)] overflow-hidden relative">
-        
-        {/* Leave Chat Warning Modal */}
-        <AnimatePresence>
-          {showLeaveConfirm && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            >
-              <motion.div 
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center"
-              >
-                <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-red-500/20">
-                  <LogOut className="w-8 h-8" />
+      {/* 🛠️ Restored Full Rules Modal with Missing Icons */}
+      <AnimatePresence>
+        {showRulesModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+            <motion.div initial={{ scale: 0.95, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, y: 20, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]">
+              <h3 className="text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
+              <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar mt-4">
+                
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
+                  <HeartHandshake className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
+                  <p className="text-sm text-[var(--text-muted)]">No bullying, racism, harassment, or abusive language.</p>
                 </div>
-                <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Leave Chat?</h3>
-                <p className="text-[var(--text-muted)] mb-8 leading-relaxed">
-                  Are you sure you want to leave? This chat will be gone forever and cannot be recovered.
-                </p>
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={handleLeaveConfirm}
-                    className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors"
-                  >
-                    Yes, Leave Chat
-                  </button>
-                  <button 
-                    onClick={() => setShowLeaveConfirm(false)}
-                    className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
+                  <ImageMinus className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
+                  <p className="text-sm text-[var(--text-muted)]">You cannot send photos directly. The stranger must request it first.</p>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
+                  <UserX className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
+                  <p className="text-sm text-[var(--text-muted)]">Do not share sensitive personal details or contact information.</p>
+                </div>
+
+              </div>
+              <label onClick={() => setRulesAgreed(!rulesAgreed)} className="flex items-center gap-3 cursor-pointer mb-6 group">
+                <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${rulesAgreed ? 'bg-[#3B82F6] border-[#3B82F6]' : 'border-[var(--text-muted)]'}`}>
+                  {rulesAgreed && <Check className="w-4 h-4 text-white" />}
+                </div>
+                <span className="text-sm text-[var(--text-muted)] select-none">I agree to the Community Rules.</span>
+              </label>
+              <button onClick={handleAcceptRules} disabled={!rulesAgreed} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold disabled:opacity-50">I Understand & Agree</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Login Prompt Modal */}
+      <AnimatePresence>
+        {showLoginPrompt && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
+              <div className="w-16 h-16 rounded-full bg-blue-500/10 text-[#3B82F6] flex items-center justify-center mx-auto mb-6">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Create an Account</h3>
+              <p className="text-[var(--text-muted)] mb-8 text-sm">You are browsing as a guest. Create an account to add friends and save connections.</p>
+              <div className="flex flex-col gap-3">
+                <button onClick={() => navigate('/auth')} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold">Log In / Sign Up</button>
+                <button onClick={() => setShowLoginPrompt(false)} className="w-full py-4 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold">Maybe Later</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] md:rounded-2xl md:border md:border-[var(--border-color)] overflow-hidden relative">
+        
         {/* Chat Header */}
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
-          <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
-            <div className="flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--background)]/60 px-3 py-1 text-sm text-[var(--text-muted)]">
-              {userCountry?.code ? (
-                <>
-                  <ReactCountryFlag countryCode={userCountry.code} svg className="text-lg leading-none" />
-                  <span className="font-medium text-[var(--text-main)]">{userCountry.name}</span>
-                </>
-              ) : (
-                <span>{userCountry?.name || 'Detecting location...'}</span>
-              )}
-            </div>
           </div>
           
           <div className="md:hidden flex items-center gap-2">
             {status === 'idle' && <><div className="w-2.5 h-2.5 rounded-full bg-zinc-400" /> <span className="text-sm font-semibold text-zinc-400">Waiting</span></>}
             {status === 'searching' && <><div className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] animate-ping" /> <span className="text-sm font-semibold text-[#3B82F6]">Searching</span></>}
-            {status === 'connected' && <><div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22C55E]" /> <span className="text-sm font-semibold text-green-500">Connected</span></>}
-            {status === 'disconnected' && <><div className="w-2.5 h-2.5 rounded-full bg-red-500" /> <span className="text-sm font-semibold text-red-500">Disconnected</span></>}
+            {status === 'connected' && <><div className="w-2.5 h-2.5 rounded-full bg-green-500" /> <span className="text-sm font-semibold text-green-500">Connected</span></>}
           </div>
 
           <div className="flex md:hidden items-center gap-1.5">
-            <div className="flex items-center gap-1.5 rounded-full border border-[var(--border-color)] bg-[var(--background)]/70 px-2.5 py-1 text-xs text-[var(--text-muted)]">
-              {userCountry?.code ? (
-                <>
-                  <ReactCountryFlag countryCode={userCountry.code} svg className="text-sm leading-none" />
-                  <span className="font-medium text-[var(--text-main)]">{userCountry.name}</span>
-                </>
-              ) : (
-                <span>{userCountry?.name || 'Detecting location...'}</span>
-              )}
-            </div>
-            
             {status !== 'idle' && (
-              <button 
-                onClick={handleNext}
-                className="bg-[#3B82F6] hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-colors active:scale-95"
-              >
+              <button onClick={handleNext} className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
                 <UserPlus className="w-4 h-4" /> Next
               </button>
             )}
             
-            <div className="relative">
-              <button 
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="p-1.5 text-[var(--text-muted)] hover:bg-[var(--border-color)] rounded-lg transition-colors"
-              >
-                <MoreVertical className="w-5 h-5" />
-              </button>
-
-              <AnimatePresence>
-                {showMobileMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 w-48 bg-[var(--card)] rounded-xl border border-[var(--border-color)] shadow-xl overflow-hidden py-1 z-50 origin-top-right"
-                  >
-                    <button 
-                      onClick={() => { setShowMobileMenu(false); setShowLeaveConfirm(true); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-500/10 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" /> Leave Chat
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <button onClick={() => setShowMobileMenu(true)} className="p-1.5 text-[var(--text-muted)] hover:bg-[var(--border-color)] rounded-lg transition-colors">
+              <MoreVertical className="w-5 h-5" />
+            </button>
           </div>
         </div>
         
-        {/* Messages / Status Area */}
-        <div 
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 bg-[var(--background)]/30 min-h-0 relative"
-          onClick={() => setShowMobileMenu(false)}
-        >
+        {/* Messages Area */}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-[var(--background)]/30 min-h-0 relative">
           {status === 'idle' && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <button
-                onClick={handleStartChat}
-                className="bg-[#3B82F6] hover:bg-blue-600 text-white px-10 py-4 rounded-full font-bold text-lg transition-all duration-300 hover:scale-[1.02] active:scale-95 shadow-xl shadow-blue-500/20"
-              >
-                Start Chatting
-              </button>
+              <button onClick={handleStartChat} className="bg-[#3B82F6] text-white px-10 py-4 rounded-full font-bold text-lg shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all">Start Chatting</button>
             </div>
           )}
-
           {status === 'searching' && (
             <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] gap-4">
               <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
               <p className="font-medium animate-pulse">Looking for someone interesting...</p>
             </div>
           )}
-
           {status !== 'idle' && messages.map(msg => (
-            msg.isSystem ? (
-              <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">
-                {msg.text}
-              </div>
-            ) : (
-              <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
-            )
+            msg.isSystem 
+              ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
+              : <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
           ))}
-
-          {/* 🛠️ The ACTUAL Typing Indicator inside the scroll container */}
           {isPartnerTyping && <TypingIndicator />}
         </div>
 
-        <input
-          ref={photoFileInputRef}
-          type="file"
-          accept="image/jpeg,image/webp,image/avif,image/png,image/heic"
-          className="hidden"
-          onChange={handlePhotoFileSelected}
-        />
+        <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
 
+        {/* 🛠️ Restored Missing Photo Request Popup UI */}
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div
@@ -566,19 +598,23 @@ export default function ChatPage() {
           )}
         </AnimatePresence>
 
-        <div className="flex-shrink-0 z-20 w-full" onClick={() => setShowMobileMenu(false)}>
-          <ChatInput
-            onSend={handleSend}
-            disabled={status !== 'connected'}
-            onRequestPhoto={handleRequestPhoto}
-            photoRequestDisabled={photoRequestBusy || status === 'idle'}
-            onTyping={handleTyping} // 🛠️ Sends typing events on keystrokes
-          />
+        <div className="flex-shrink-0 z-20 w-full">
+          <ChatInput onSend={handleSend} disabled={status !== 'connected'} onRequestPhoto={handleRequestPhoto} photoRequestDisabled={photoRequestBusy || status === 'idle'} onTyping={handleTyping} />
         </div>
       </div>
 
       <div className="hidden md:block w-80 h-full flex-shrink-0">
-        <ConnectionCard status={status} onNext={handleNext} userCountry={userCountry} partnerCountry={partnerCountry} />
+        <ConnectionCard 
+          status={status} 
+          onNext={handleNext} 
+          userCountry={userCountry} 
+          partnerCountry={partnerCountry} 
+          partnerUsername={partnerUsername}
+          partnerGender={partnerGender}
+          onAddFriend={handleAddFriend}
+          friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
+          onLeaveConfirm={() => setShowLeaveConfirm(true)} 
+        />
       </div>
       
     </div>

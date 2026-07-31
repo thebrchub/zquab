@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import ReactCountryFlag from 'react-country-flag';
-import { UserPlus, LogOut, Check, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { UserPlus, LogOut, Check, Loader2, Globe2, Plus, User } from 'lucide-react';
+
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
@@ -9,11 +10,11 @@ interface Props {
   onNext: () => void;
   userCountry?: { name: string; code: string } | null;
   partnerCountry?: { name: string; code: string } | null;
-  
-  // 🛠️ The hidden username from the backend, plus action props
   partnerUsername?: string; 
+  partnerGender?: string; 
   onAddFriend?: () => void;
   friendRequestStatus?: 'none' | 'loading' | 'sent';
+  onLeaveConfirm: () => void;
 }
 
 export default function ConnectionCard({ 
@@ -22,111 +23,159 @@ export default function ConnectionCard({
   userCountry, 
   partnerCountry,
   partnerUsername,
+  partnerGender,
   onAddFriend,
-  friendRequestStatus = 'none'
+  friendRequestStatus = 'none',
+  onLeaveConfirm
 }: Props) {
+  const [showConfirm, setShowConfirm] = useState(false);
+
   return (
-    <div className="glass rounded-2xl p-6 flex flex-col h-full border border-[var(--border-color)] shadow-sm bg-[var(--card)]">
-      <div className="mb-8">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-4">
-          Connection Status
+    <div className="glass rounded-2xl p-6 flex flex-col h-full border border-[var(--border-color)] shadow-sm bg-[var(--card)] relative overflow-hidden">
+      
+      {/* INLINE CONFIRMATION OVERLAY */}
+      {showConfirm && (
+        <div className="absolute inset-0 z-20 bg-[var(--card)]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-12 h-12 bg-blue-500/10 text-[#3B82F6] rounded-full flex items-center justify-center mb-3">
+            <UserPlus className="w-6 h-6" />
+          </div>
+          <h4 className="text-[var(--text-main)] font-bold text-lg mb-1">Add @{partnerUsername}?</h4>
+          <p className="text-sm text-[var(--text-muted)] mb-6">They will receive a friend request.</p>
+          
+          <div className="flex flex-col gap-2 w-full">
+            <button
+              onClick={() => {
+                onAddFriend?.();
+                setShowConfirm(false);
+              }}
+              className="w-full py-3 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-bold transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
+            >
+              Send Request
+            </button>
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="w-full py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-xl font-bold transition-all active:scale-[0.98]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STATUS HEADER */}
+      <div className="mb-6">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-3">
+          Status
         </h3>
         
         {status === 'searching' && (
-          <div className="flex items-center gap-3 text-[#3B82F6] font-medium bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
+          <div className="flex items-center gap-2 text-[#3B82F6] font-bold">
             <div className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] animate-ping" />
             Searching...
           </div>
         )}
         
         {status === 'connected' && (
-          <div className="flex items-center gap-3 text-green-600 dark:text-green-400 font-medium bg-green-500/10 p-3 rounded-xl border border-green-500/20">
+          <div className="flex items-center gap-2 text-green-500 font-bold">
             <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22C55E]" />
             Stranger Connected
           </div>
         )}
 
         {status === 'disconnected' && (
-          <div className="flex items-center gap-3 text-red-600 dark:text-red-400 font-medium bg-red-500/10 p-3 rounded-xl border border-red-500/20">
+          <div className="flex items-center gap-2 text-red-500 font-bold">
             <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-            Stranger Disconnected
+            Disconnected
           </div>
         )}
       </div>
 
-      <div className="space-y-3 mt-auto">
+      <div className="space-y-4 mt-auto">
         
-        {/* 🛠️ ADD FRIEND BUTTON - Only shows if they are a real user (have a username) */}
+        {/* 🛠️ THE COMPACT STACKED PROFILE WITH OVERLAPPING BADGE */}
         {status === 'connected' && partnerUsername && (
-          <div className="mb-6 bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <p className="text-xs text-[var(--text-muted)] text-center mb-3">
-              Enjoying the chat? Add them to your network!
-            </p>
-            <button 
-              onClick={onAddFriend}
-              disabled={friendRequestStatus !== 'none'}
-              className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                friendRequestStatus === 'sent' 
-                  ? 'bg-green-500/10 text-green-500 border border-green-500/20' 
-                  : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:opacity-90 text-white shadow-md shadow-blue-500/20 active:scale-[0.98]'
-              } disabled:opacity-80 disabled:active:scale-100`}
-            >
-              {friendRequestStatus === 'loading' && <Loader2 className="w-4 h-4 animate-spin" />}
-              {friendRequestStatus === 'sent' && <><Check className="w-4 h-4" /> Request Sent</>}
-              {friendRequestStatus === 'none' && <><UserPlus className="w-4 h-4" /> Add Friend</>}
-            </button>
+          <div className="bg-[var(--background)]/50 p-6 rounded-3xl border border-[var(--border-color)] flex flex-col items-center justify-center text-center relative">
+            
+            {/* Avatar Container (Relative for Badge positioning) */}
+            <div className="relative mb-3">
+              <div className="w-20 h-20 bg-indigo-500/10 border-2 border-indigo-500/20 rounded-full flex items-center justify-center shadow-sm">
+                <User className="w-10 h-10 text-indigo-500" />
+              </div>
+
+              {/* Dynamic Overlapping Badge */}
+              {friendRequestStatus === 'none' ? (
+                <button
+                  onClick={() => setShowConfirm(true)}
+                  className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#3B82F6] hover:bg-blue-600 text-white flex items-center justify-center transition-transform active:scale-95 shadow-md border-[3px] border-[var(--background)]"
+                  aria-label="Add Friend"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              ) : friendRequestStatus === 'loading' ? (
+                <div className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[var(--card)] border-[3px] border-[var(--background)] flex items-center justify-center shadow-md">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#3B82F6]" />
+                </div>
+              ) : (
+                <div className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md border-[3px] border-[var(--background)]">
+                  <Check className="w-4 h-4" />
+                </div>
+              )}
+            </div>
+            
+            <span className="font-black text-[var(--text-main)] text-xl leading-tight mb-1">@{partnerUsername}</span>
+            <span className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-bold">
+              {partnerGender || 'Verified User'}
+            </span>
           </div>
         )}
 
-        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--background)]/50 px-4 py-3 text-sm text-[var(--text-muted)]">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Your location
-          </div>
-          <div className="flex items-center gap-2">
+        {/* LOCATIONS */}
+        <div className="flex items-center justify-between rounded-2xl border border-[var(--border-color)] bg-[var(--background)]/50 p-4">
+          <div className="flex-1 flex flex-col items-center group relative cursor-help">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2">You</span>
             {userCountry?.code ? (
-              <>
-                <ReactCountryFlag countryCode={userCountry.code} svg className="text-lg leading-none" />
-                <span className="font-medium text-[var(--text-main)]">{userCountry.name}</span>
-              </>
+              <ReactCountryFlag countryCode={userCountry.code} svg className="text-3xl rounded-sm drop-shadow-sm" />
             ) : (
-              <span>{userCountry?.name || 'Detecting location...'}</span>
+              <div className="w-8 h-6 bg-[var(--border-color)] rounded animate-pulse" />
             )}
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--text-main)] text-[var(--background)] text-xs font-bold px-3 py-1.5 rounded-lg pointer-events-none whitespace-nowrap z-10 shadow-xl">
+              {userCountry?.name || 'Detecting...'}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--text-main)]"></div>
+            </div>
+          </div>
+
+          <div className="w-px h-10 bg-[var(--border-color)] mx-2"></div>
+
+          <div className="flex-1 flex flex-col items-center group relative cursor-help">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2">Stranger</span>
+            {partnerCountry?.code ? (
+              <ReactCountryFlag countryCode={partnerCountry.code} svg className="text-3xl rounded-sm drop-shadow-sm" />
+            ) : (
+              <Globe2 className="w-7 h-7 text-[var(--text-muted)] opacity-50" />
+            )}
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--text-main)] text-[var(--background)] text-xs font-bold px-3 py-1.5 rounded-lg pointer-events-none whitespace-nowrap z-10 shadow-xl">
+              {partnerCountry?.name || 'Unknown Location'}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[var(--text-main)]"></div>
+            </div>
           </div>
         </div>
 
-        {partnerCountry && (
-          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--background)]/50 px-4 py-3 text-sm text-[var(--text-muted)]">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-              Stranger location
-            </div>
-            <div className="flex items-center gap-2">
-              {partnerCountry.code ? (
-                <>
-                  <ReactCountryFlag countryCode={partnerCountry.code} svg className="text-lg leading-none" />
-                  <span className="font-medium text-[var(--text-main)]">{partnerCountry.name}</span>
-                </>
-              ) : (
-                <span>{partnerCountry.name}</span>
-              )}
-            </div>
-          </div>
-        )}
-
         <button 
           onClick={onNext} 
-          className="w-full flex items-center justify-center gap-2 bg-[var(--background)] hover:bg-[var(--border-color)] border border-[var(--border-color)] text-[var(--text-main)] py-3.5 rounded-xl font-bold transition-all active:scale-[0.98] mt-2"
+          className="w-full flex items-center justify-center gap-2 bg-[var(--background)] hover:bg-[var(--border-color)] border border-[var(--border-color)] text-[var(--text-main)] py-4 rounded-xl font-bold transition-all active:scale-[0.98] mt-2"
         >
           <UserPlus className="w-5 h-5" />
           Next Stranger
         </button>
         
-        <Link 
-          to="/"
-          className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3.5 rounded-xl font-bold transition-all active:scale-[0.98]"
+        {/* 🛠️ Replaced <Link> with a button to trigger the modal */}
+        <button 
+          onClick={onLeaveConfirm}
+          className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-4 rounded-xl font-bold transition-all active:scale-[0.98]"
         >
           <LogOut className="w-5 h-5" />
           Leave Chat
-        </Link>
+        </button>
       </div>
     </div>
   );
