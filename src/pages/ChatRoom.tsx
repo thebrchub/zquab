@@ -6,6 +6,7 @@ import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import { Loader2, ArrowLeft, MoreVertical, User } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
+import { useAuth } from '../context/AuthContext';
 
 export default function ChatRoom({ 
   inlineRoomId, 
@@ -45,6 +46,7 @@ export default function ChatRoom({
   const scrollRef = useRef<HTMLDivElement>(null);
   const topObserverRef = useRef<HTMLDivElement>(null);
   const { isConnected, sendMessage, lastMessage } = useWebSocket();
+  const { user } = useAuth();
 
   // Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
@@ -105,6 +107,15 @@ export default function ChatRoom({
       // chat.MsgChatMessage) — 'message_delivered'/'message_sent_confirm'
       // were never real wire types, kept only as harmless legacy fallbacks.
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
+        // The engine broadcasts a sent message to every room member,
+        // including the sender's own connection — without this check, our
+        // own message boomerangs back and shows up as a duplicate 'from
+        // partner' bubble (the optimistic local copy in handleSend already
+        // covers our own message, so just drop the echo).
+        if (lastMessage.from && user?.user_id && lastMessage.from === user.user_id) {
+          return;
+        }
+
         // envelope.ts is an int64 — protobufjs decodes it as a Long object,
         // not a plain number; new Date(Long) is an Invalid Date and
         // .toISOString() throws. Number(...) coerces Long via its
