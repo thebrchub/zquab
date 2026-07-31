@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
@@ -10,7 +11,10 @@ import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
-type SystemMessage = { id: string; text: string };
+
+
+// 🛠️ Extend ChatMessage to safely include system messages in a single array
+type UIMessage = ChatMessage & { isSystem?: boolean };
 
 const compressImageToWebP = (file: File): Promise<File> => {
   return new Promise((resolve, reject) => {
@@ -60,8 +64,9 @@ const compressImageToWebP = (file: File): Promise<File> => {
 export default function ChatPage() {
   const { user } = useAuth();
   const [status, setStatus] = useState<Status>('idle');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
+  
+  // 🛠️ UNIFIED STATE: Everything lives here now!
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -72,8 +77,6 @@ export default function ChatPage() {
   
   const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
-  
-  // 🛠️ Photo Request States
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
 
@@ -104,7 +107,8 @@ export default function ChatPage() {
       setPartnerGender(type === 'registered' ? 'Male' : undefined);
       
       setFriendRequestSent(false);
-      setSystemMessages(prev => [...prev, { id: Date.now().toString(), text: 'You are now chatting with a random stranger.' }]);
+      // 🛠️ FIX: Push system message directly to the UI array
+      setMessages(prev => [...prev, { id: `sys-${Date.now()}`, text: 'You are now chatting with a random stranger.', isOwn: false, isSystem: true }]);
     }, 1500);
   };
 
@@ -113,9 +117,7 @@ export default function ChatPage() {
     setIsPartnerTyping(true);
     setTimeout(() => {
       setIsPartnerTyping(false);
-      setMessages(prev => [...prev, { 
-        id: Date.now().toString(), text: 'Hey! This is a mock message from the frontend.', isOwn: false 
-      }]);
+      setMessages(prev => [...prev, { id: `msg-${Date.now()}`, text: 'Hey! This is a mock message from the frontend.', isOwn: false }]);
     }, 1500);
   };
 
@@ -145,7 +147,8 @@ export default function ChatPage() {
     return new ChatClient({
       onStatusChange: setStatus,
       onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
-      onSystemMessage: (text) => setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text }]),
+      // 🛠️ FIX: All system messages now inject directly into the main messages array
+      onSystemMessage: (text) => setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]),
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
@@ -164,22 +167,22 @@ export default function ChatPage() {
         setStatus('disconnected');
         setIsPartnerTyping(false); 
       },
-      onSocketOpen: () => setSystemMessages((prev) => [...prev, { id: 'sys-open', text: 'Connected to the chat server.' }]),
-      onSocketClose: () => setSystemMessages((prev) => [...prev, { id: 'sys-close', text: 'Socket closed. Reconnecting...' }]),
-      onError: (error) => setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: `Error: ${error}` }]),
+      onSocketOpen: () => setMessages((prev) => [...prev, { id: `sys-open-${Date.now()}`, text: 'Connected to the chat server.', isSystem: true, isOwn: false }]),
+      onSocketClose: () => setMessages((prev) => [...prev, { id: `sys-close-${Date.now()}`, text: 'Socket closed. Reconnecting...', isSystem: true, isOwn: false }]),
+      onError: (error) => setMessages((prev) => [...prev, { id: `sys-err-${Date.now()}`, text: `Error: ${error}`, isSystem: true, isOwn: false }]),
       onPhotoRequest: () => {
         setIncomingPhotoRequest(true);
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: 'Stranger wants to see a photo of you.' }]);
+        setMessages((prev) => [...prev, { id: `sys-pr-${Date.now()}`, text: 'Stranger wants to see a photo of you.', isSystem: true, isOwn: false }]);
       },
       onPhotoResponse: (_roomId, _from, accepted) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.'}]);
+        setMessages((prev) => [...prev, { id: `sys-prr-${Date.now()}`, text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.', isSystem: true, isOwn: false }]);
       },
       onPhotoReady: (_roomId, _from, url) => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        setMessages((prev) => [...prev, { id: `${Date.now()}`, text: '', isOwn: false, imageUrl: url}]);
+        setMessages((prev) => [...prev, { id: `msg-photo-${Date.now()}`, text: '', isOwn: false, imageUrl: url }]);
       },
     });
   }, [isDev]);
@@ -235,7 +238,7 @@ export default function ChatPage() {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [messages, status, systemMessages, isPartnerTyping]);
+  }, [messages, status, isPartnerTyping]);
 
   const handleStartChat = () => {
     if (isDev) {
@@ -253,13 +256,13 @@ export default function ChatPage() {
     isTypingStateRef.current = false;
     chatClient?.sendTypingEnd();
 
-    if (isDev) {
-      setMessages((prev) => [...prev, { id: Date.now().toString(), text, isOwn: true }]);
-      return;
-    }
-    const temporaryId = chatClient?.sendChatMessage(text);
-    if (temporaryId) {
-      setMessages((prev) => [...prev, { id: temporaryId, text, isOwn: true }]);
+    // 🛠️ FIX: Optimistic UI update. Force the message onto the screen instantly!
+    const newId = `msg-${Date.now()}-${Math.random()}`;
+    setMessages((prev) => [...prev, { id: newId, text, isOwn: true }]);
+
+    if (!isDev) {
+      // Fire it to the backend without relying on a return ID
+      chatClient?.sendChatMessage(text);
     }
   };
 
@@ -301,7 +304,7 @@ export default function ChatPage() {
       return;
     }
     if (isDev) {
-      setSystemMessages(prev => [...prev, { id: Date.now().toString(), text: 'Mock: Photo request sent.' }]);
+      setMessages(prev => [...prev, { id: `sys-${Date.now()}`, text: 'Mock: Photo request sent.', isOwn: false, isSystem: true }]);
       return;
     }
 
@@ -312,13 +315,12 @@ export default function ChatPage() {
         photoRequestTimeoutRef.current = window.setTimeout(() => {
           photoRequestTimeoutRef.current = null;
           setPhotoRequestBusy(false);
-          setSystemMessages((prev) => [...prev, { id: `${Date.now()}`, text: "Stranger didn't respond." }]);
+          setMessages((prev) => [...prev, { id: `sys-${Date.now()}`, text: "Stranger didn't respond.", isSystem: true, isOwn: false }]);
         }, 30_000);
       })
       .catch(() => setPhotoRequestBusy(false));
   };
 
-  // 🛠️ Restored Missing Logic for handling photo requests
   const handleDeclinePhotoRequest = () => {
     setIncomingPhotoRequest(false);
     chatClient?.declinePhotoRequest().catch(() => {});
@@ -338,7 +340,7 @@ export default function ChatPage() {
       const webpFile = await compressImageToWebP(file);
       if (!isDev) await chatClient?.sharePhoto(webpFile);
       const previewUrl = URL.createObjectURL(webpFile);
-      setMessages((prev) => [...prev, { id: `${Date.now()}`, text: '', isOwn: true, imageUrl: previewUrl }]);
+      setMessages((prev) => [...prev, { id: `msg-${Date.now()}`, text: '', isOwn: true, imageUrl: previewUrl }]);
     } catch (error) {
       console.error(error);
     }
@@ -463,7 +465,7 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* 🛠️ Restored Full Rules Modal with Missing Icons */}
+      {/* Rules Modal */}
       <AnimatePresence>
         {showRulesModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
@@ -558,17 +560,20 @@ export default function ChatPage() {
               <p className="font-medium animate-pulse">Looking for someone interesting...</p>
             </div>
           )}
+          
+          {/* 🛠️ Render loop now explicitly looks for the new `isSystem` flag */}
           {status !== 'idle' && messages.map(msg => (
             msg.isSystem 
               ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
               : <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
           ))}
+          
           {isPartnerTyping && <TypingIndicator />}
         </div>
 
         <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
 
-        {/* 🛠️ Restored Missing Photo Request Popup UI */}
+        {/* Photo Request Popup UI */}
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div
