@@ -105,10 +105,16 @@ export default function ChatRoom({
       // chat.MsgChatMessage) — 'message_delivered'/'message_sent_confirm'
       // were never real wire types, kept only as harmless legacy fallbacks.
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
+        // envelope.ts is an int64 — protobufjs decodes it as a Long object,
+        // not a plain number; new Date(Long) is an Invalid Date and
+        // .toISOString() throws. Number(...) coerces Long via its
+        // toString() correctly; fall back to now() if it's ever missing/NaN.
+        const parsedTs = Number(lastMessage.ts);
+        const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
         const newMsg = {
           id: lastMessage.id,
           content: lastMessage.payload?.text || '', 
-          created_at: new Date(lastMessage.ts).toISOString(),
+          created_at: new Date(tsMs).toISOString(),
           isOwn: false, 
           status: 'delivered'
         };
