@@ -98,6 +98,10 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/safety" element={<Safety />} />
                 <Route path="/contact" element={<Contact />} />
+                {/* Public profile view — backend allows anonymous/guest
+                    viewing now (reduced payload, no friend_request_status);
+                    UserProfile handles that itself, no auth guard here. */}
+                <Route path="/user/:username" element={<UserProfile />} />
 
                 {/* Auth Route */}
                 <Route 
@@ -143,15 +147,6 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Profile />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/user/:username" 
-                  element={
-                    <ProtectedRoute>
-                      <UserProfile />
                     </ProtectedRoute>
                   } 
                 />

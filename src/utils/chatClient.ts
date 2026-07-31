@@ -8,7 +8,7 @@ type ChatCallbackOptions = {
   onStatusChange: (status: Status) => void;
   onIncomingMessage: (message: ChatMessage) => void;
   onSystemMessage: (text: string) => void;
-  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string) => void;
+  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string, partnerUsername?: string) => void;
   onDisconnected: (reason: string) => void;
   onSocketOpen?: () => void;
   onSocketClose?: (code: number, reason: string) => void;
@@ -16,6 +16,8 @@ type ChatCallbackOptions = {
   onPhotoRequest?: (roomId: string, from: string) => void;
   onPhotoResponse?: (roomId: string, from: string, accepted: boolean) => void;
   onPhotoReady?: (roomId: string, from: string, url: string, expiresAt: number) => void;
+  /** Fired when a mutual add-friend during this stranger match succeeds. */
+  onFriendAccepted?: (dmRoomId: string) => void;
   /** Fired once the local IP-geolocation lookup resolves (or fails). */
   onLocationDetected?: (country: { name: string; code: string } | null) => void;
   /** 🛠️ Added for typing animation */
@@ -57,6 +59,8 @@ export class ChatClient {
   private PhotoRequestProto: protobuf.Type | null = null;
   private PhotoResponseProto: protobuf.Type | null = null;
   private PhotoReadyProto: protobuf.Type | null = null;
+  private FriendAcceptedProto: protobuf.Type | null = null;
+  private FriendRequestProto: protobuf.Type | null = null;
 
   // Detected once at startup and sent along with /match/enter so the server
   // can pass a `partner_location` through to the other side of a match.
@@ -113,6 +117,8 @@ export class ChatClient {
     this.PhotoRequestProto = root.lookupType('eventspb.PhotoRequest');
     this.PhotoResponseProto = root.lookupType('eventspb.PhotoResponse');
     this.PhotoReadyProto = root.lookupType('eventspb.PhotoReady');
+    this.FriendAcceptedProto = root.lookupType('eventspb.FriendAccepted');
+    this.FriendRequestProto = root.lookupType('eventspb.FriendRequest');
   }
 
   async ensureGuest() {
@@ -177,8 +183,9 @@ export class ChatClient {
             const roomId = match.roomId as string;
             const partnerId = match.partnerId as string;
             const partnerLocation = match.partnerLocation as string | undefined;
+            const partnerUsername = match.partnerUsername as string | undefined;
             this.currentRoomId = roomId;
-            this.callbacks.onMatchFound(roomId, partnerId, partnerLocation);
+            this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername);
             this.callbacks.onStatusChange('connected');
             this.callbacks.onSystemMessage('Match found! Say hello.');
             break;
@@ -230,6 +237,22 @@ export class ChatClient {
             this.callbacks.onStatusChange('disconnected');
             this.callbacks.onSystemMessage('Chat room closed.');
             this.callbacks.onDisconnected('Room closed');
+            break;
+          }
+          case 'friend_accepted': {
+            if (!this.FriendAcceptedProto) break;
+            const accepted = this.FriendAcceptedProto.decode(payload) as any;
+            this.callbacks.onFriendAccepted?.(accepted.dmRoomId as string);
+            this.callbacks.onSystemMessage("You're now friends!");
+            break;
+          }
+          case 'friend_request': {
+            if (!this.FriendRequestProto) break;
+            const req = this.FriendRequestProto.decode(payload) as any;
+            // Only surface this for the current stranger room — ignore any
+            // unrelated friend_request (e.g. from search/profile elsewhere).
+            if ((req.roomId as string) !== this.currentRoomId) break;
+            this.callbacks.onSystemMessage('Stranger wants to be friends! Click Add Friend to accept.');
             break;
           }
           case 'error': {
@@ -344,7 +367,7 @@ export class ChatClient {
   }
 
   async sendMatchAction(roomId: string, action: 'skip' | 'block' | 'friend') {
-    await this.restPost('/api/v1/match/action', { room_id: roomId, action });
+    return this.restPost('/api/v1/match/action', { room_id: roomId, action });
   }
 
   sendChatMessage(text: string): string | null {
@@ -426,6 +449,17 @@ export class ChatClient {
     await this.sendMatchAction(this.currentRoomId, 'block');
     this.currentRoomId = null;
     this.callbacks.onStatusChange('disconnected');
+  }
+
+  // Sends the mutual add-friend request for the current stranger match.
+  // The REST response tells the caller 'pending' (one-sided so far) or
+  // 'friends' (already mutual); the async 'friend_accepted' WS event (above)
+  // is what fires when the *other* side accepts later.
+  async addCurrentPartnerAsFriend() {
+    if (!this.currentRoomId) {
+      throw new Error('No active room');
+    }
+    return this.sendMatchAction(this.currentRoomId, 'friend');
   }
 
   // ---------------------------------------------------------------------

@@ -101,7 +101,10 @@ export default function ChatRoom({
     if (isDevMode || !lastMessage || !roomId) return;
     
     if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
-      if (lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
+      // 'chat_message' is what the backend actually sends (go-starter-kit
+      // chat.MsgChatMessage) — 'message_delivered'/'message_sent_confirm'
+      // were never real wire types, kept only as harmless legacy fallbacks.
+      if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
         const newMsg = {
           id: lastMessage.id,
           content: lastMessage.payload?.text || '', 
@@ -183,7 +186,7 @@ export default function ChatRoom({
     if (!isDevMode && !isConnected) return;
     
     if (!isDevMode) {
-      sendMessage('send_message', { text }, roomId);
+      sendMessage('chat_message', { text }, roomId);
       
       if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
       isMyTypingStateRef.current = false;

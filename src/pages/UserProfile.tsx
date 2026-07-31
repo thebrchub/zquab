@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { roomsApi } from '../api/rooms';
-import { Loader2, UserPlus, Clock, MessageSquare, UserX } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn } from 'lucide-react';
 
 export default function UserProfile() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -89,6 +91,20 @@ export default function UserProfile() {
 
   // Dynamic button rendering based on exact API statuses
   const renderActionButton = () => {
+    // Anonymous/guest viewer — backend omits friend_request_status entirely
+    // for these callers, so there's no relationship to act on. Showing
+    // Add Friend/Message here would just 401 on click.
+    if (!user || user.is_guest || profile.friend_request_status === undefined) {
+      return (
+        <button
+          onClick={() => navigate('/auth')}
+          className="w-full py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold hover:bg-[var(--border-color)] transition-colors flex items-center justify-center gap-2"
+        >
+          <LogIn className="w-5 h-5" /> Log in to connect
+        </button>
+      );
+    }
+
     if (profile.friend_request_status === 'friends') {
       return (
         <button 

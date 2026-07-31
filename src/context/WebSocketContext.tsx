@@ -130,15 +130,19 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       let payloadBytes: any = new Uint8Array();
       
       // 🛠️ Encode the inner payload if we are sending text
-      if (type === 'send_message' && payload?.text) {
+      if (type === 'chat_message' && payload?.text) {
         const chatMsg = ChatMessageProto.create({ text: payload.text });
         payloadBytes = ChatMessageProto.encode(chatMsg).finish();
       }
 
       // 🛠️ Create and encode the outer envelope
+      // NOTE: protobufjs parses chat.proto without `keepCase`, so fields are
+      // exposed camelCase (`roomId`, not `room_id`) — passing `room_id` here
+      // was silently dropped, meaning outgoing friend messages never carried
+      // a room id at all.
       const envelope = Envelope.create({
         type,
-        room_id: roomId,
+        roomId,
         to,
         payload: payloadBytes,
         ts: Date.now(),

@@ -148,7 +148,8 @@ export default function ChatPage() {
       onStatusChange: setStatus,
       onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
       onSystemMessage: (text) => console.log('[Chat System]:', text),
-      onMatchFound: (_roomId, _partnerId, partnerLocation) => {
+      onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername) => {
+        setPartnerUsername(partnerUsername);
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -159,6 +160,10 @@ export default function ChatPage() {
         } else {
           setPartnerCountry({ name: normalized, code: '' });
         }
+      },
+      onFriendAccepted: (dmRoomId) => {
+        setFriendRequestSent(false);
+        navigate(`/chat/${dmRoomId}`);
       },
       onLocationDetected: (country) => setUserCountry(country),
       onPartnerTyping: (isTyping) => setIsPartnerTyping(isTyping),
@@ -336,7 +341,15 @@ export default function ChatPage() {
       setShowLoginPrompt(true); 
       return;
     }
+    if (isDev) {
+      setFriendRequestSent(true);
+      return;
+    }
     setFriendRequestSent(true);
+    chatClient?.addCurrentPartnerAsFriend().catch((error) => {
+      console.error(error);
+      setFriendRequestSent(false);
+    });
   };
 
   const handleLeaveConfirm = () => {

@@ -6,10 +6,26 @@ message MatchFound {
     string partner_id       = 2;
     string partner_avatar   = 3;
     string partner_location = 4;
+    string partner_username = 5;
 }
 
 message StrangerDisconnected {
     string room_id = 1;
+}
+
+// MsgType "friend_accepted" — sent to both users when a mutual add-friend
+// during a stranger match succeeds; dm_room_id is the new permanent DM room.
+message FriendAccepted {
+    string room_id    = 1;
+    string dm_room_id = 2;
+}
+
+// MsgType "friend_request" — one-sided: partner wants to be friends, waiting
+// on you to reciprocate (room_id set when this originates from a stranger match).
+message FriendRequest {
+    string from     = 1;
+    string room_id  = 2;
+    string username = 3;
 }
 
 // Stranger photo sharing (request/approve, relay-free — the actual bytes go
