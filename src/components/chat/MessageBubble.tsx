@@ -5,6 +5,7 @@ interface Props {
   status?: 'sent' | 'delivered' | 'read';
   time?: string;
   imageUrl?: string;
+  onImageClick?: () => void; // 🛠️ Added click handler prop
 }
 
 // Utility to check if a string contains ONLY emojis (and spaces)
@@ -15,7 +16,7 @@ const isOnlyEmojis = (str: string) => {
   return emojiRegex.test(str);
 };
 
-export default function MessageBubble({ message, content, isOwn, status, time, imageUrl }: Props) {
+export default function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImageClick }: Props) {
   const displayText = content || message || '';
   const formattedTime = time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   
@@ -30,7 +31,8 @@ export default function MessageBubble({ message, content, isOwn, status, time, i
           <img 
             src={imageUrl} 
             alt="Shared photo" 
-            className="w-full h-auto rounded-2xl object-cover shadow-sm border border-[var(--border-color)]" 
+            onClick={onImageClick} // 🛠️ Added the click event
+            className="w-full h-auto rounded-2xl object-cover shadow-sm border border-[var(--border-color)] cursor-zoom-in hover:opacity-90 active:scale-[0.98] transition-all" // 🛠️ Added interactive hover/click styling
           />
         </div>
       )}

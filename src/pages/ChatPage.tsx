@@ -64,6 +64,9 @@ export default function ChatPage() {
   const [status, setStatus] = useState<Status>('idle');
   const [messages, setMessages] = useState<UIMessage[]>([]);
   
+  // 🛠️ NEW: Lightbox State
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null); 
@@ -93,7 +96,6 @@ export default function ChatPage() {
 
   const isDev = import.meta.env.DEV;
 
-  // 🛠️ FIX 2: Tracking status in a Ref so it doesn't trigger useEffect cleanups!
   const statusRef = useRef(status);
   useEffect(() => {
     statusRef.current = status;
@@ -145,10 +147,7 @@ export default function ChatPage() {
     return new ChatClient({
       onStatusChange: setStatus,
       onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
-      
-      // 🛠️ FIX 1: Send technical logs to the console, NOT the UI
       onSystemMessage: (text) => console.log('[Chat System]:', text),
-      
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
@@ -167,13 +166,9 @@ export default function ChatPage() {
         setStatus('disconnected');
         setIsPartnerTyping(false); 
       },
-      
-      // 🛠️ FIX 1: Silenced UI spam for open/close/error
       onSocketOpen: () => console.log('WebSocket Connected'),
       onSocketClose: () => console.log('WebSocket Closed'),
       onError: (error) => console.error('WebSocket Error:', error),
-      
-      // Only keep the actual user-facing alerts
       onPhotoRequest: () => {
         setIncomingPhotoRequest(true);
         setMessages((prev) => [...prev, { id: `sys-pr-${Date.now()}`, text: 'Stranger wants to see a photo of you.', isSystem: true, isOwn: false }]);
@@ -193,7 +188,6 @@ export default function ChatPage() {
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // 🛠️ FIX 2: Check the REF instead of the state, avoiding dependency loop
       if (statusRef.current === 'connected') {
         e.preventDefault();
         e.returnValue = ''; 
@@ -201,12 +195,9 @@ export default function ChatPage() {
         chatClient?.leaveQueueSilently(true);
       }
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // 🛠️ FIX 2: Since status is removed from dependencies, this ONLY fires when leaving the page!
       chatClient?.leaveQueueSilently();
       chatClient?.shutdown();
       clearPhotoRequestTimeout();
@@ -216,14 +207,11 @@ export default function ChatPage() {
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
       if (status !== 'connected') return;
-
       const target = (e.target as HTMLElement).closest('a');
       if (target) {
         if (target.target === '_blank') return; 
-
         e.preventDefault();
         e.stopPropagation(); 
-
         const href = target.getAttribute('href');
         if (href) {
           setPendingRoute(href);
@@ -231,7 +219,6 @@ export default function ChatPage() {
         }
       }
     };
-
     document.addEventListener('click', handleGlobalClick, { capture: true });
     return () => document.removeEventListener('click', handleGlobalClick, { capture: true });
   }, [status]);
@@ -288,7 +275,6 @@ export default function ChatPage() {
       setShowMobileMenu(false); 
       return;
     }
-
     chatClient?.nextStranger().catch(() => {});
     setMessages([]);
     setShowMobileMenu(false);
@@ -307,7 +293,6 @@ export default function ChatPage() {
       setMessages(prev => [...prev, { id: `sys-${Date.now()}`, text: 'Mock: Photo request sent.', isOwn: false, isSystem: true }]);
       return;
     }
-
     setPhotoRequestBusy(true);
     chatClient?.requestPhoto()
       .then(() => {
@@ -365,6 +350,36 @@ export default function ChatPage() {
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)] relative">
       
+      {/* 🛠️ NEW: Fullscreen Lightbox Overlay */}
+      <AnimatePresence>
+        {viewingImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setViewingImage(null)}
+            className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+          >
+            <button
+              onClick={() => setViewingImage(null)}
+              className="absolute top-4 right-4 md:top-8 md:right-8 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              src={viewingImage}
+              alt="Fullscreen view"
+              onClick={(e) => e.stopPropagation()} // Prevents clicking the image from closing it immediately
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {isDev && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 backdrop-blur-md px-4 py-2 rounded-full shadow-lg">
           <span className="text-xs font-bold text-purple-400 uppercase tracking-wider mr-2">Dev</span>
@@ -374,35 +389,25 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* MOBILE SIDEBAR DRAWER */}
       <AnimatePresence>
         {showMobileMenu && (
           <>
             <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowMobileMenu(false)}
               className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
             />
-            
             <motion.div
-              initial={{ x: '100%' }} 
-              animate={{ x: 0 }} 
-              exit={{ x: '100%' }}
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="md:hidden fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[101] shadow-2xl flex flex-col border-l border-[var(--border-color)]"
             >
               <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)]">
                 <h3 className="font-bold text-[var(--text-main)]">Dashboard</h3>
-                <button 
-                  onClick={() => setShowMobileMenu(false)} 
-                  className="p-2 bg-[var(--card)] rounded-full border border-[var(--border-color)] text-[var(--text-main)] active:scale-95 transition-transform"
-                >
+                <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-[var(--card)] rounded-full border border-[var(--border-color)] text-[var(--text-main)] active:scale-95 transition-transform">
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              
               <div className="flex-1 overflow-y-auto p-4 pb-8">
                 <ConnectionCard 
                   status={status} 
@@ -421,21 +426,10 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* Leave Chat Warning Modal */}
       <AnimatePresence>
         {showLeaveConfirm && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center"
-            >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
               <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-red-500/20">
                 <LogOut className="w-8 h-8" />
               </div>
@@ -444,19 +438,10 @@ export default function ChatPage() {
                 Are you sure you want to leave? This chat will be gone forever and cannot be recovered.
               </p>
               <div className="flex flex-col gap-3">
-                <button 
-                  onClick={handleLeaveConfirm}
-                  className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors"
-                >
+                <button onClick={handleLeaveConfirm} className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors">
                   Yes, Leave Chat
                 </button>
-                <button 
-                  onClick={() => {
-                    setShowLeaveConfirm(false);
-                    setPendingRoute(null);
-                  }}
-                  className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors"
-                >
+                <button onClick={() => { setShowLeaveConfirm(false); setPendingRoute(null); }} className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors">
                   Cancel
                 </button>
               </div>
@@ -465,29 +450,24 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* Rules Modal */}
       <AnimatePresence>
         {showRulesModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
             <motion.div initial={{ scale: 0.95, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, y: 20, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]">
               <h3 className="text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
               <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar mt-4">
-                
                 <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
                   <HeartHandshake className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
                   <p className="text-sm text-[var(--text-muted)]">No bullying, racism, harassment, or abusive language.</p>
                 </div>
-
                 <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
                   <ImageMinus className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
                   <p className="text-sm text-[var(--text-muted)]">You cannot send photos directly. The stranger must request it first.</p>
                 </div>
-
                 <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
                   <UserX className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
                   <p className="text-sm text-[var(--text-muted)]">Do not share sensitive personal details or contact information.</p>
                 </div>
-
               </div>
               <label onClick={() => setRulesAgreed(!rulesAgreed)} className="flex items-center gap-3 cursor-pointer mb-6 group">
                 <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${rulesAgreed ? 'bg-[#3B82F6] border-[#3B82F6]' : 'border-[var(--text-muted)]'}`}>
@@ -501,7 +481,6 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* Login Prompt Modal */}
       <AnimatePresence>
         {showLoginPrompt && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -521,33 +500,27 @@ export default function ChatPage() {
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] md:rounded-2xl md:border md:border-[var(--border-color)] overflow-hidden relative">
-        
-        {/* Chat Header */}
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
           <div className="flex items-center gap-3">
             <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
           </div>
-          
           <div className="md:hidden flex items-center gap-2">
             {status === 'idle' && <><div className="w-2.5 h-2.5 rounded-full bg-zinc-400" /> <span className="text-sm font-semibold text-zinc-400">Waiting</span></>}
             {status === 'searching' && <><div className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] animate-ping" /> <span className="text-sm font-semibold text-[#3B82F6]">Searching</span></>}
             {status === 'connected' && <><div className="w-2.5 h-2.5 rounded-full bg-green-500" /> <span className="text-sm font-semibold text-green-500">Connected</span></>}
           </div>
-
           <div className="flex md:hidden items-center gap-1.5">
             {status !== 'idle' && (
               <button onClick={handleNext} className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
                 <UserPlus className="w-4 h-4" /> Next
               </button>
             )}
-            
             <button onClick={() => setShowMobileMenu(true)} className="p-1.5 text-[var(--text-muted)] hover:bg-[var(--border-color)] rounded-lg transition-colors">
               <MoreVertical className="w-5 h-5" />
             </button>
           </div>
         </div>
         
-        {/* Messages Area */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-[var(--background)]/30 min-h-0 relative">
           {status === 'idle' && (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -561,10 +534,17 @@ export default function ChatPage() {
             </div>
           )}
           
+          {/* 🛠️ UPDATED: Passing down the onImageClick handler to the bubble */}
           {status !== 'idle' && messages.map(msg => (
             msg.isSystem 
               ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
-              : <MessageBubble key={msg.id} message={msg.text} isOwn={msg.isOwn} imageUrl={msg.imageUrl} />
+              : <MessageBubble 
+                  key={msg.id} 
+                  message={msg.text} 
+                  isOwn={msg.isOwn} 
+                  imageUrl={msg.imageUrl} 
+                  onImageClick={msg.imageUrl ? () => setViewingImage(msg.imageUrl!) : undefined}
+                />
           ))}
           
           {isPartnerTyping && <TypingIndicator />}
@@ -572,7 +552,6 @@ export default function ChatPage() {
 
         <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
 
-        {/* Photo Request Popup UI */}
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div
@@ -585,16 +564,10 @@ export default function ChatPage() {
                 <Image className="w-4 h-4 text-[#3B82F6]" /> Stranger wants to see a photo of you.
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleDeclinePhotoRequest}
-                  className="flex items-center justify-center gap-2 glass hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 text-[var(--text-muted)] py-2.5 rounded-xl font-medium transition-all"
-                >
+                <button onClick={handleDeclinePhotoRequest} className="flex items-center justify-center gap-2 glass hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 text-[var(--text-muted)] py-2.5 rounded-xl font-medium transition-all">
                   <X className="w-4 h-4" /> Decline
                 </button>
-                <button
-                  onClick={handleAcceptPhotoRequest}
-                  className="flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white py-2.5 rounded-xl font-medium transition-all"
-                >
+                <button onClick={handleAcceptPhotoRequest} className="flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white py-2.5 rounded-xl font-medium transition-all">
                   <Check className="w-4 h-4" /> Accept
                 </button>
               </div>
@@ -620,7 +593,6 @@ export default function ChatPage() {
           onLeaveConfirm={() => setShowLeaveConfirm(true)} 
         />
       </div>
-      
     </div>
   );
 }
