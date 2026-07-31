@@ -59,9 +59,11 @@ export default function UserProfile() {
     setActionLoading(true);
     try {
       const room = await roomsApi.createRoom(username);
-      // Navigate straight into the chat room. 
-      // If they aren't friends, it goes to message requests automatically on the backend.
-      navigate(`/chat/${room.room_id}`);
+      
+      // 🛠️ CHANGED: Navigate to the integrated HomePage instead of the standalone ChatRoom.
+      // Passes the room ID via both query parameter and state so the desktop split-view can open it instantly.
+      navigate(`/home?room=${room.room_id}`, { state: { activeRoomId: room.room_id } });
+      
     } catch (err: any) {
       alert(err.message || 'Failed to start conversation');
       setActionLoading(false);
@@ -159,7 +161,6 @@ export default function UserProfile() {
     <div className="max-w-xl mx-auto w-full p-4 md:p-6 pb-20">
       <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-sm">
         
-        {/* 🛠️ The ShieldBan button has been completely removed from this banner */}
         <div className="h-32 bg-gradient-to-r from-blue-500/20 to-purple-500/20 w-full relative">
         </div>
         

@@ -17,13 +17,12 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 
 // Protected App Pages
-import OnboardingPage from './pages/OnboardingPage'; // NEW: Onboarding flow
+import OnboardingPage from './pages/OnboardingPage'; 
 import HomePage from './pages/HomePage';
 import ChatRoom from './pages/ChatRoom';
 import Profile from './pages/Profile';
-import UserProfile from './pages/UserProfile';
-import FriendsHub from './pages/FriendsHub';
 import SearchPage from './pages/SearchPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 // 1. Protected Route Wrapper (For standard logged-in pages)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -148,42 +147,26 @@ function App() {
                 />
                 
                 <Route 
-                  path="/user/:username" 
+                  path="/search" 
                   element={
                     <ProtectedRoute>
-                      <UserProfile />
+                      <SearchPage />
                     </ProtectedRoute>
                   } 
                 />
                 
-                <Route 
-                  path="/friends" 
-                  element={
-                    <ProtectedRoute>
-                      <FriendsHub />
-                    </ProtectedRoute>
-                  } 
-                />
-
-                <Route 
-  path="/search" 
-  element={
-    <ProtectedRoute>
-      <SearchPage />
-    </ProtectedRoute>
-  } 
-/>
-                
-                {/* Catch-all fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* 🛠️ FIX: The ONE and ONLY catch-all route, placed inside RootLayout! */}
+                <Route path="*" element={<NotFoundPage />} />
                 
               </Route>
+
               {/* 🛠️ DEV UI TESTING ROUTES (No Auth Wrappers) */}
-<Route path="/dev/onboarding" element={<OnboardingPage />} />
-<Route path="/dev/auth" element={<AuthPage />} />
-<Route path="/dev/home" element={<HomePage />} />
-<Route path="/dev/chat" element={<ChatRoom />} />
-<Route path="/dev/profile" element={<Profile />} />
+              <Route path="/dev/onboarding" element={<OnboardingPage />} />
+              <Route path="/dev/auth" element={<AuthPage />} />
+              <Route path="/dev/home" element={<HomePage />} />
+              <Route path="/dev/chat" element={<ChatRoom />} />
+              <Route path="/dev/profile" element={<Profile />} />
+
             </Routes>
           </BrowserRouter>
         </WebSocketProvider>
