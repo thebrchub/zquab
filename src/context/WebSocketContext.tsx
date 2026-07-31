@@ -11,7 +11,7 @@ const ReceiptProto = root.lookupType ? root.lookupType('chatpb.Receipt') : null;
 
 interface WebSocketContextType {
   isConnected: boolean;
-  sendMessage: (type: string, payload?: any, roomId?: string, to?: string) => void;
+  sendMessage: (type: string, payload?: any, roomId?: string, to?: string, id?: string) => string | undefined;
   lastMessage: any | null; 
 }
 
@@ -120,29 +120,34 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const sendMessage = (type: string, payload?: any, roomId?: string, to?: string) => {
+  const sendMessage = (type: string, payload?: any, roomId?: string, to?: string, id?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('Cannot send message: WebSocket is not open');
-      return;
+      return undefined;
     }
 
     try {
       let payloadBytes: any = new Uint8Array();
       
       // 🛠️ Encode the inner payload if we are sending text
-      if (type === 'send_message' && payload?.text) {
+      if (type === 'chat_message' && payload?.text) {
         const chatMsg = ChatMessageProto.create({ text: payload.text });
         payloadBytes = ChatMessageProto.encode(chatMsg).finish();
       }
 
       // 🛠️ Create and encode the outer envelope
+      // NOTE: protobufjs parses chat.proto without `keepCase`, so fields are
+      // exposed camelCase (`roomId`, not `room_id`) — passing `room_id` here
+      // was silently dropped, meaning outgoing friend messages never carried
+      // a room id at all.
+      const msgId = id || globalThis.crypto?.randomUUID?.() || `${Date.now()}`;
       const envelope = Envelope.create({
         type,
-        room_id: roomId,
+        roomId,
         to,
         payload: payloadBytes,
         ts: Date.now(),
-        id: globalThis.crypto?.randomUUID?.() || `${Date.now()}`
+        id: msgId
       });
       
       const bytes = Envelope.encode(envelope).finish();
@@ -151,8 +156,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         : new Uint8Array(bytes).slice().buffer;
         
       wsRef.current.send(buffer);
+      return msgId;
     } catch (err) {
       console.error('Failed to encode/send message:', err);
+      return undefined;
     }
   };
 

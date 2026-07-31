@@ -21,6 +21,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import HomePage from './pages/HomePage';
 import ChatRoom from './pages/ChatRoom';
 import Profile from './pages/Profile';
+import UserProfile from './pages/UserProfile';
 import SearchPage from './pages/SearchPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -97,6 +98,10 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/safety" element={<Safety />} />
                 <Route path="/contact" element={<Contact />} />
+                {/* Public profile view — backend allows anonymous/guest
+                    viewing now (reduced payload, no friend_request_status);
+                    UserProfile handles that itself, no auth guard here. */}
+                <Route path="/user/:username" element={<UserProfile />} />
 
                 {/* Auth Route */}
                 <Route 
