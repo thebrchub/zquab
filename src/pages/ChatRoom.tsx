@@ -54,6 +54,11 @@ export default function ChatRoom({
   const myTypingTimeoutRef = useRef<number | null>(null);
   const isMyTypingStateRef = useRef(false);
 
+  // IDs of messages this device has sent and already shown optimistically
+  // — lets us recognize "this is just my own echo" (skip) vs. "this is the
+  // same account messaging from a different device" (show, as own).
+  const sentMessageIdsRef = useRef<Set<string>>(new Set());
+
   // 1. Initial Load of History
   useEffect(() => {
     if (isDevMode) {
@@ -108,11 +113,12 @@ export default function ChatRoom({
       // were never real wire types, kept only as harmless legacy fallbacks.
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
         // The engine broadcasts a sent message to every room member,
-        // including the sender's own connection — without this check, our
-        // own message boomerangs back and shows up as a duplicate 'from
-        // partner' bubble (the optimistic local copy in handleSend already
-        // covers our own message, so just drop the echo).
-        if (lastMessage.from && user?.user_id && lastMessage.from === user.user_id) {
+        // including the sender's own connection (intentional — lets the
+        // same account see its own messages on other logged-in devices
+        // too). Only skip it if THIS device already showed it optimistically
+        // (matched by id); otherwise show it, marked own via `from`.
+        if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
+          sentMessageIdsRef.current.delete(lastMessage.id);
           return;
         }
 
@@ -122,11 +128,12 @@ export default function ChatRoom({
         // toString() correctly; fall back to now() if it's ever missing/NaN.
         const parsedTs = Number(lastMessage.ts);
         const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
+        const isOwn = Boolean(lastMessage.from && user?.user_id && lastMessage.from === user.user_id);
         const newMsg = {
           id: lastMessage.id,
           content: lastMessage.payload?.text || '', 
           created_at: new Date(tsMs).toISOString(),
-          isOwn: false, 
+          isOwn,
           status: 'delivered'
         };
         
@@ -201,17 +208,20 @@ export default function ChatRoom({
   const handleSend = (text: string) => {
     if (!text.trim()) return;
     if (!isDevMode && !isConnected) return;
-    
+
+    const localId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+
     if (!isDevMode) {
-      sendMessage('chat_message', { text }, roomId);
-      
+      sendMessage('chat_message', { text }, roomId, undefined, localId);
+      sentMessageIdsRef.current.add(localId);
+
       if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
       isMyTypingStateRef.current = false;
       sendMessage('typing_end', {}, roomId);
     }
     
     const optimisticMsg = {
-      id: Date.now().toString(),
+      id: localId,
       content: text,
       created_at: new Date().toISOString(),
       isOwn: true,
