@@ -12,8 +12,6 @@ import { useAuth } from '../context/AuthContext';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
-
-// 🛠️ Extend ChatMessage to safely include system messages in a single array
 type UIMessage = ChatMessage & { isSystem?: boolean };
 
 const compressImageToWebP = (file: File): Promise<File> => {
@@ -64,8 +62,6 @@ const compressImageToWebP = (file: File): Promise<File> => {
 export default function ChatPage() {
   const { user } = useAuth();
   const [status, setStatus] = useState<Status>('idle');
-  
-  // 🛠️ UNIFIED STATE: Everything lives here now!
   const [messages, setMessages] = useState<UIMessage[]>([]);
   
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -97,18 +93,20 @@ export default function ChatPage() {
 
   const isDev = import.meta.env.DEV;
 
+  // 🛠️ FIX 2: Tracking status in a Ref so it doesn't trigger useEffect cleanups!
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   const handleMockConnect = (type: 'guest' | 'registered') => {
     setStatus('searching');
     setTimeout(() => {
       setStatus('connected');
       setPartnerCountry({ name: 'United States', code: 'US' });
-      
       setPartnerUsername(type === 'registered' ? 'shadow_ninja' : undefined);
       setPartnerGender(type === 'registered' ? 'Male' : undefined);
-      
       setFriendRequestSent(false);
-      // 🛠️ FIX: Push system message directly to the UI array
-      setMessages(prev => [...prev, { id: `sys-${Date.now()}`, text: 'You are now chatting with a random stranger.', isOwn: false, isSystem: true }]);
     }, 1500);
   };
 
@@ -147,8 +145,10 @@ export default function ChatPage() {
     return new ChatClient({
       onStatusChange: setStatus,
       onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
-      // 🛠️ FIX: All system messages now inject directly into the main messages array
-      onSystemMessage: (text) => setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]),
+      
+      // 🛠️ FIX 1: Send technical logs to the console, NOT the UI
+      onSystemMessage: (text) => console.log('[Chat System]:', text),
+      
       onMatchFound: (_roomId, _partnerId, partnerLocation) => {
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
@@ -167,9 +167,13 @@ export default function ChatPage() {
         setStatus('disconnected');
         setIsPartnerTyping(false); 
       },
-      onSocketOpen: () => setMessages((prev) => [...prev, { id: `sys-open-${Date.now()}`, text: 'Connected to the chat server.', isSystem: true, isOwn: false }]),
-      onSocketClose: () => setMessages((prev) => [...prev, { id: `sys-close-${Date.now()}`, text: 'Socket closed. Reconnecting...', isSystem: true, isOwn: false }]),
-      onError: (error) => setMessages((prev) => [...prev, { id: `sys-err-${Date.now()}`, text: `Error: ${error}`, isSystem: true, isOwn: false }]),
+      
+      // 🛠️ FIX 1: Silenced UI spam for open/close/error
+      onSocketOpen: () => console.log('WebSocket Connected'),
+      onSocketClose: () => console.log('WebSocket Closed'),
+      onError: (error) => console.error('WebSocket Error:', error),
+      
+      // Only keep the actual user-facing alerts
       onPhotoRequest: () => {
         setIncomingPhotoRequest(true);
         setMessages((prev) => [...prev, { id: `sys-pr-${Date.now()}`, text: 'Stranger wants to see a photo of you.', isSystem: true, isOwn: false }]);
@@ -189,7 +193,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (status === 'connected') {
+      // 🛠️ FIX 2: Check the REF instead of the state, avoiding dependency loop
+      if (statusRef.current === 'connected') {
         e.preventDefault();
         e.returnValue = ''; 
       } else {
@@ -201,18 +206,18 @@ export default function ChatPage() {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      // 🛠️ FIX 2: Since status is removed from dependencies, this ONLY fires when leaving the page!
       chatClient?.leaveQueueSilently();
       chatClient?.shutdown();
       clearPhotoRequestTimeout();
     };
-  }, [chatClient, status]); 
+  }, [chatClient]); 
 
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
       if (status !== 'connected') return;
 
       const target = (e.target as HTMLElement).closest('a');
-      
       if (target) {
         if (target.target === '_blank') return; 
 
@@ -228,10 +233,7 @@ export default function ChatPage() {
     };
 
     document.addEventListener('click', handleGlobalClick, { capture: true });
-
-    return () => {
-      document.removeEventListener('click', handleGlobalClick, { capture: true });
-    };
+    return () => document.removeEventListener('click', handleGlobalClick, { capture: true });
   }, [status]);
 
   useEffect(() => {
@@ -256,12 +258,10 @@ export default function ChatPage() {
     isTypingStateRef.current = false;
     chatClient?.sendTypingEnd();
 
-    // 🛠️ FIX: Optimistic UI update. Force the message onto the screen instantly!
     const newId = `msg-${Date.now()}-${Math.random()}`;
     setMessages((prev) => [...prev, { id: newId, text, isOwn: true }]);
 
     if (!isDev) {
-      // Fire it to the backend without relying on a return ID
       chatClient?.sendChatMessage(text);
     }
   };
@@ -561,7 +561,6 @@ export default function ChatPage() {
             </div>
           )}
           
-          {/* 🛠️ Render loop now explicitly looks for the new `isSystem` flag */}
           {status !== 'idle' && messages.map(msg => (
             msg.isSystem 
               ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
