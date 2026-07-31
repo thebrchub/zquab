@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
-import { Home, Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
+import { Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
@@ -30,7 +30,6 @@ export default function Navbar() {
 
   // 🛠️ SMART SCROLL LOGIC
   useEffect(() => {
-    // If it's a static app interface, lock the navbar so it never hides
     if (isStaticPage) {
       setIsVisible(true);
       return;
@@ -39,7 +38,6 @@ export default function Navbar() {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       
-      // Hide if scrolling down past 80px, Show if scrolling up
       if (currentScrollY > lastScrollY && currentScrollY > 80) {
         setIsVisible(false);
       } else {
@@ -74,20 +72,14 @@ export default function Navbar() {
   };
 
   return (
-
     <nav className={`sticky top-0 z-50 glass border-b transition-transform duration-300 ease-in-out ${
       isVisible ? 'translate-y-0' : '-translate-y-full'
     }`}>
       <div className="w-full px-4 md:px-8 lg:px-12 xl:px-16 relative">
         <div className="flex justify-between items-center h-16 sm:h-20">
           
-          {/* Left: Logo & Text */}
-          <Link 
-            to="/" 
-            className={`flex items-center gap-3 z-10 ${
-              isChatPage ? "absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0" : "" 
-            }`}
-          >
+          {/* Left: Logo & Text (Consistently on the left now) */}
+          <Link to="/" className="flex items-center gap-3 z-10">
             <img 
               src="/logo.png" 
               alt="zQuab Logo Icon" 
@@ -138,27 +130,18 @@ export default function Navbar() {
               <ThemeToggle />
             </div>
 
-            {/* Primary CTA Button */}
-            {isChatPage ? (
-              <Link
-                to="/"
-                className="hidden md:flex items-center gap-2 glass hover:bg-[var(--border-color)] text-[var(--text-main)] px-5 py-2.5 rounded-full font-bold transition-all duration-200 active:scale-95 text-base"
-              >
-                <Home className="w-5 h-5" /> Home
-              </Link>
-            ) : isAuthLoading ? (
+            {/* 🛠️ Primary CTA Button (Now always visible, dynamic text based on auth) */}
+            {isAuthLoading ? (
               <div className="hidden md:block w-32 h-11 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
             ) : (
-              !isFullUser && (
-                <button
-                  onClick={handleStartChatting}
-                  disabled={isConnecting}
-                  className="hidden md:flex items-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white px-7 py-3 rounded-full font-bold transition-all duration-200 active:scale-95 disabled:opacity-70 shadow-lg shadow-blue-500/20 text-base whitespace-nowrap"
-                >
-                  {isConnecting && <Loader2 className="w-5 h-5 animate-spin" />}
-                  Start Chat
-                </button>
-              )
+              <button
+                onClick={handleStartChatting}
+                disabled={isConnecting}
+                className="hidden md:flex items-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white px-7 py-3 rounded-full font-bold transition-all duration-200 active:scale-95 disabled:opacity-70 shadow-lg shadow-blue-500/20 text-base whitespace-nowrap"
+              >
+                {isConnecting && <Loader2 className="w-5 h-5 animate-spin" />}
+                {isFullUser ? 'Stranger Chat' : 'Start Chat'}
+              </button>
             )}
 
             {/* Mobile-Only Icons */}
@@ -201,7 +184,8 @@ export default function Navbar() {
             </Link>
           )}
 
-          {!isAuthLoading && !isFullUser && !isChatPage && (
+          {/* 🛠️ Mobile CTA Button restored and dynamic */}
+          {!isAuthLoading && (
             <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
               <button
                 onClick={handleStartChatting}
@@ -209,7 +193,7 @@ export default function Navbar() {
                 className="w-full flex justify-center items-center gap-2 bg-[#3B82F6] active:bg-blue-600 text-white px-6 py-4 rounded-xl font-bold transition-all disabled:opacity-70 shadow-lg shadow-blue-500/20 text-lg"
               >
                 {isConnecting && <Loader2 className="w-6 h-6 animate-spin" />}
-                Start Chat
+                {isFullUser ? 'Stranger Chat' : 'Start Chat'}
               </button>
             </div>
           )}
