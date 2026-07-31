@@ -147,7 +147,7 @@ export default function Hero() {
                   >
                     <div className="bg-[#3B82F6] text-white px-4 py-3 rounded-2xl rounded-tr-sm text-sm font-medium max-w-[85%]">
                       Just the team at Blazing Render Creation Studios pushing some boundaries. 🚀
-                    </div>
+                    </div>h
                   </motion.div>
                   
                   <motion.div 

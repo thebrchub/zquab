@@ -1,26 +1,57 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
-import { Home, Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X } from 'lucide-react';
+import { Home, Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const location = useLocation();
   const isChatPage = location.pathname === '/chat';
+  const isHomePage = location.pathname === '/home';
   
-  // 🛠️ THE FIX: Grab isLoading from AuthContext to prevent the flash
-  // We alias it to 'isAuthLoading' to not conflict with the local 'isConnecting' state
+  // 🛠️ SMART SCROLL CHECK: Identify if we are on an app-like static page
+  const isStaticPage = isChatPage || isHomePage;
+  
   const { user, loginAsGuest, isLoading: isAuthLoading } = useAuth();
   
   const navigate = useNavigate();
-  const [isConnecting, setIsConnecting] = useState(false); // Renamed from 'loading'
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // 🛠️ SCROLL STATE
+  const [isVisible, setIsVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
 
   const isFullUser = user && !user.is_guest;
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // 🛠️ SMART SCROLL LOGIC
+  useEffect(() => {
+    // If it's a static app interface, lock the navbar so it never hides
+    if (isStaticPage) {
+      setIsVisible(true);
+      return;
+    }
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Hide if scrolling down past 80px, Show if scrolling up
+      if (currentScrollY > lastScrollY && currentScrollY > 80) {
+        setIsVisible(false);
+      } else {
+        setIsVisible(true);
+      }
+      
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY, isStaticPage]);
 
   const handleStartChatting = async () => {
     if (user) {
@@ -43,7 +74,10 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 glass border-b">
+
+    <nav className={`sticky top-0 z-50 glass border-b transition-transform duration-300 ease-in-out ${
+      isVisible ? 'translate-y-0' : '-translate-y-full'
+    }`}>
       <div className="w-full px-4 md:px-8 lg:px-12 xl:px-16 relative">
         <div className="flex justify-between items-center h-16 sm:h-20">
           
@@ -78,7 +112,6 @@ export default function Navbar() {
 
               <div className="h-8 w-px bg-[var(--border-color)] mx-1"></div>
 
-              {/* 🛠️ Prevent Login flash: Show a skeleton loader if auth is still resolving */}
               {isAuthLoading ? (
                 <div className="w-24 h-8 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
               ) : isFullUser ? (
@@ -97,7 +130,13 @@ export default function Navbar() {
               )}
             </div>
 
-            <ThemeToggle />
+            {/* 🛠️ FRICTIONLESS GLOBAL SEARCH + THEME TOGGLE */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Link to="/search" className="p-2 sm:p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95" aria-label="Search">
+                <Search className="w-5 h-5 sm:w-6 sm:h-6" />
+              </Link>
+              <ThemeToggle />
+            </div>
 
             {/* Primary CTA Button */}
             {isChatPage ? (
@@ -108,7 +147,6 @@ export default function Navbar() {
                 <Home className="w-5 h-5" /> Home
               </Link>
             ) : isAuthLoading ? (
-              // 🛠️ Skeleton loader for the Start Chat button to prevent layout shifts
               <div className="hidden md:block w-32 h-11 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
             ) : (
               !isFullUser && (
@@ -124,8 +162,7 @@ export default function Navbar() {
             )}
 
             {/* Mobile-Only Icons */}
-            <div className="md:hidden flex items-center gap-2">
-              {/* 🛠️ Skeleton loader for mobile user icon */}
+            <div className="md:hidden flex items-center gap-1 sm:gap-2">
               {isAuthLoading ? (
                 <div className="w-10 h-10 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
               ) : (
@@ -156,7 +193,6 @@ export default function Navbar() {
             <BookOpen className="w-6 h-6 text-[var(--text-muted)]" /> Blog
           </Link>
           
-          {/* 🛠️ Handle Mobile Dropdown links based on auth loading state */}
           {isAuthLoading ? (
              <div className="w-full h-14 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-xl my-2"></div>
           ) : isFullUser && (
