@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import { Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { roomsApi } from '../api/rooms';
+import { useRooms } from '../context/RoomsContext';
 
 export default function Navbar() {
   const location = useLocation();
@@ -21,33 +21,13 @@ export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
-  const [totalUnread, setTotalUnread] = useState(0);
+  const { totalUnread } = useRooms();
 
   const isFullUser = user && !user.is_guest;
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
-
-  // Re-fetch whenever location.search changes. Fetch immediately for
-  // responsiveness, then re-check after the backend's ~3s flush interval —
-  // 150ms was ~20x too short to reflect a just-sent read receipt.
-  useEffect(() => {
-    if (isFullUser) {
-      const fetchUnread = async () => {
-        try {
-          const data = await roomsApi.getRooms();
-          const count = data.rooms?.reduce((acc: number, room: any) => acc + (room.unread_count || 0), 0) || 0;
-          setTotalUnread(count);
-        } catch (err) {
-          console.error('Failed to fetch unread count:', err);
-        }
-      };
-      fetchUnread();
-      const timeoutId = setTimeout(fetchUnread, 3500);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isFullUser, location.pathname, location.search]);
 
   useEffect(() => {
     if (isStaticPage) {

@@ -4,6 +4,7 @@ import { ThemeProvider } from './hooks/useTheme';
 import RootLayout from './layout/RootLayout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WebSocketProvider } from './context/WebSocketContext';
+import { RoomsProvider } from './context/RoomsContext';
 import { Loader2 } from 'lucide-react';
 
 // Route-level code splitting — each page is only fetched when its route is
@@ -95,6 +96,7 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <WebSocketProvider>
+          <RoomsProvider>
           <BrowserRouter>
             <Suspense fallback={<RouteFallback />}>
             <Routes>
@@ -179,6 +181,7 @@ function App() {
             </Routes>
             </Suspense>
           </BrowserRouter>
+          </RoomsProvider>
         </WebSocketProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -1,27 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
-import { useWebSocket } from '../context/WebSocketContext'; // 🛠️ RESTORED!
+import { useRooms, type Room } from '../context/RoomsContext';
 import { Loader2, MessageSquare, Bell, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import ChatRoom from './ChatRoom'; 
-
-interface User {
-  name: string;
-  username: string; 
-  avatar_url?: string;
-  is_online?: boolean;
-}
-
-interface Room {
-  room_id: string;
-  member_ids: string[];
-  last_message_at: string;
-  last_message_preview: string;
-  unread_count: number;
-}
 
 interface FriendRequest {
   request_id: number;
@@ -37,102 +21,25 @@ export default function HomePage() {
   const navigate = useNavigate();
   const location = useLocation(); 
   const { user } = useAuth(); 
-  
-  // 🛠️ RESTORED THE HOOK
-  const { sendMessage, isConnected, lastMessage } = useWebSocket(); 
-  
-  const [rooms, setRooms] = useState<Room[]>([]);
+
+  const { rooms, usersMap, loading, refreshRooms, setActiveRoomId } = useRooms();
+
   const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [usersMap, setUsersMap] = useState<Record<string, User>>({});
-  const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   
   const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string, isOnline?: boolean } | null>(null);
 
-  // Silent (no loading spinner) rooms refetch — reused for mount, friend-accept,
-  // and live WS-triggered resyncs, so the inbox list isn't just a one-shot snapshot.
-  const refreshRooms = useCallback(async () => {
-    try {
-      const roomsData = await roomsApi.getRooms();
-      setRooms(roomsData.rooms || []);
-      setUsersMap(prev => ({ ...prev, ...(roomsData.users || {}) }));
-    } catch (err) {
-      console.error('Failed to refresh rooms:', err);
-    }
+  useEffect(() => {
+    friendsApi.getRequests('received')
+      .then(setRequests)
+      .catch(err => console.error('Failed to load friend requests:', err));
   }, []);
 
+  // Tell the shared rooms context which room is currently open, so it can
+  // skip bumping this room's badge on new messages and mark it read.
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const [roomsData, requestsData] = await Promise.all([
-          roomsApi.getRooms(),
-          friendsApi.getRequests('received') 
-        ]);
-
-        setRooms(roomsData.rooms || []);
-        setUsersMap(roomsData.users || {});
-        setRequests(requestsData || []); 
-      } catch (err: any) {
-        console.error('Failed to load dashboard data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboardData();
-  }, []);
-
-  // Live resync via WebSocket data only — no REST call. A new chat_message
-  // patches the matching room's preview/timestamp/unread_count in place and
-  // re-sorts by recency, instead of leaving `rooms` frozen at the initial
-  // mount-time snapshot (or re-hitting the REST API on every WS event).
-  useEffect(() => {
-    if (!lastMessage || lastMessage.type !== 'chat_message') return;
-
-    const msgRoomId = lastMessage.room_id || lastMessage.roomId;
-    if (!msgRoomId) return;
-
-    const myId = (user as any)?.user_id || (user as any)?.id;
-    const msgSender = lastMessage.sender_id || lastMessage.from;
-    const isOwn = Boolean(msgSender && myId && msgSender === myId);
-    const isOpenRoom = selectedChat?.roomId === msgRoomId;
-    const parsedTs = Number(lastMessage.ts);
-    const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
-
-    setRooms(prevRooms => {
-      const idx = prevRooms.findIndex(r => r.room_id === msgRoomId);
-      if (idx === -1) return prevRooms; // unknown room — next full load will pick it up
-
-      const updatedRoom = {
-        ...prevRooms[idx],
-        last_message_preview: lastMessage.payload?.text ?? prevRooms[idx].last_message_preview,
-        last_message_at: new Date(tsMs).toISOString(),
-        unread_count: (!isOwn && !isOpenRoom) ? prevRooms[idx].unread_count + 1 : prevRooms[idx].unread_count,
-      };
-
-      const rest = prevRooms.filter((_, i) => i !== idx);
-      return [updatedRoom, ...rest];
-    });
-  }, [lastMessage, user, selectedChat?.roomId]);
-
-  // Presence is otherwise a one-time snapshot from the last /rooms fetch —
-  // patch usersMap live from the same WS events the backend already
-  // broadcasts, instead of leaving "online"/"offline" frozen at fetch time.
-  useEffect(() => {
-    if (!lastMessage) return;
-    if (lastMessage.type !== 'presence_online' && lastMessage.type !== 'presence_offline') return;
-
-    const presenceUserId = lastMessage.from || lastMessage.sender_id;
-    if (!presenceUserId) return;
-
-    setUsersMap(prev => {
-      if (!prev[presenceUserId]) return prev;
-      return {
-        ...prev,
-        [presenceUserId]: { ...prev[presenceUserId], is_online: lastMessage.type === 'presence_online' },
-      };
-    });
-  }, [lastMessage]);
+    setActiveRoomId(selectedChat?.roomId ?? null);
+  }, [selectedChat?.roomId, setActiveRoomId]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -158,24 +65,6 @@ export default function HomePage() {
       setSelectedChat(null);
     }
   }, [location.search, location.state, rooms.length, user, usersMap]); 
-
-  // 🛠️ RESTORED THE UNREAD BADGE CLEARER: This successfully hits the backend now!
-  useEffect(() => {
-    if (!selectedChat?.roomId || !isConnected || rooms.length === 0) return;
-
-    const roomIndex = rooms.findIndex(r => r.room_id === selectedChat.roomId);
-    if (roomIndex >= 0 && rooms[roomIndex].unread_count > 0) {
-      
-      // Sending exact 'read' type with no payload as per backend specs
-      sendMessage('read', undefined, selectedChat.roomId);
-      
-      setRooms(prevRooms => {
-        const updated = [...prevRooms];
-        updated[roomIndex] = { ...updated[roomIndex], unread_count: 0 };
-        return updated;
-      });
-    }
-  }, [selectedChat?.roomId, isConnected, rooms, sendMessage]);
 
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 
