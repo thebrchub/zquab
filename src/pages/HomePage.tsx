@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom'; // 🛠️ Added useLocation
+import { useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
-import { useWebSocket } from '../context/WebSocketContext'; // 🛠️ Added useWebSocket
+import { useWebSocket } from '../context/WebSocketContext';
 import { Loader2, MessageSquare, Bell, Search, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -34,9 +34,9 @@ type Tab = 'chats' | 'requests';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const location = useLocation(); // 🛠️ Needed to parse URL parameters
+  const location = useLocation(); 
   const { user } = useAuth(); 
-  const { sendMessage, isConnected } = useWebSocket(); // 🛠️ Grab the socket connection
+  const { sendMessage, isConnected } = useWebSocket(); 
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -64,36 +64,47 @@ export default function HomePage() {
         setLoading(false);
       }
     };
-
     fetchDashboardData();
   }, []);
 
-  // 🛠️ NEW: Check URL for ?room=xyz parameter so clicking "Message" on a profile auto-opens the chat
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const roomIdParam = params.get('room');
 
-    if (roomIdParam && rooms.length > 0 && !selectedChat) {
+    if (roomIdParam) {
       const room = rooms.find(r => r.room_id === roomIdParam);
-      if (room) {
-        const partnerId = room.member_ids.find(id => id !== (user as any)?.id);
-        const partner = partnerId ? usersMap[partnerId] : null;
-        
-        // Auto-select on desktop
-        if (window.innerWidth >= 768) {
-          setSelectedChat({ roomId: room.room_id, name: partner?.name || 'Unknown', avatar: partner?.avatar_url });
-        }
+      const partnerId = room?.member_ids.find(id => id !== (user as any)?.id);
+      const partner = partnerId ? usersMap[partnerId] : null;
+      
+      setSelectedChat({ 
+        roomId: roomIdParam, 
+        name: location.state?.friendName || partner?.name || 'Chat Room', 
+        avatar: location.state?.friendAvatar || partner?.avatar_url 
+      });
 
-        // Optimistically clear the unread count locally
-        setRooms(prev => prev.map(r => r.room_id === room.room_id ? { ...r, unread_count: 0 } : r));
-        
-        // Inform the backend that messages have been read
-        if (isConnected) {
-          sendMessage('read', {}, room.room_id);
+      setRooms(prevRooms => {
+        const roomIndex = prevRooms.findIndex(r => r.room_id === roomIdParam);
+        if (roomIndex >= 0 && prevRooms[roomIndex].unread_count > 0) {
+          if (isConnected) {
+            sendMessage('read', {}, roomIdParam);
+          }
+          const updatedRooms = [...prevRooms];
+          updatedRooms[roomIndex] = { ...updatedRooms[roomIndex], unread_count: 0 };
+          return updatedRooms;
         }
-      }
+        return prevRooms;
+      });
+
+    } else {
+      setSelectedChat(null);
     }
-  }, [location.search, rooms, selectedChat, user, usersMap, isConnected, sendMessage]);
+  }, [location.search, location.state, user, usersMap, isConnected, sendMessage]);
+
+  const handleRoomClick = (room: Room, partnerName: string, partnerAvatar?: string) => {
+    navigate(`/home?room=${room.room_id}`, { 
+      state: { friendName: partnerName, friendAvatar: partnerAvatar } 
+    });
+  };
 
   const handleAcceptRequest = async (username: string) => {
     try {
@@ -124,25 +135,6 @@ export default function HomePage() {
     return isToday 
       ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
-
-  // 🛠️ NEW: Centralized Room Click Handler
-  const handleRoomClick = (room: Room, partnerName: string, partnerAvatar?: string) => {
-    // 1. Optimistic UI: Erase unread badge instantly
-    setRooms(prev => prev.map(r => r.room_id === room.room_id ? { ...r, unread_count: 0 } : r));
-
-    // 2. Alert the Backend that the user has seen the chat
-    if (isConnected) {
-      sendMessage('read', {}, room.room_id);
-    }
-
-    // 3. Navigate or Expand
-    if (window.innerWidth >= 768) {
-      setSelectedChat({ roomId: room.room_id, name: partnerName, avatar: partnerAvatar });
-      window.history.replaceState({}, '', `/home?room=${room.room_id}`); // Silently update URL
-    } else {
-      navigate(`/chat/${room.room_id}`, { state: { friendName: partnerName, friendAvatar: partnerAvatar }});
-    }
   };
 
   if (loading) {
@@ -227,7 +219,7 @@ export default function HomePage() {
                       return (
                         <div 
                           key={room.room_id} 
-                          onClick={() => handleRoomClick(room, partnerName, partner?.avatar_url)} // 🛠️ Uses the new robust click handler
+                          onClick={() => handleRoomClick(room, partnerName, partner?.avatar_url)}
                           className={`p-4 transition-colors flex items-center gap-4 cursor-pointer ${
                             isSelected ? 'bg-[var(--card)] border-l-4 border-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
                           }`}
@@ -275,7 +267,7 @@ export default function HomePage() {
               </motion.div>
             )}
 
-            {/* 🔔 FRIEND REQUESTS TAB */}
+            {/* 🔔 FRIEND REQUESTS TAB RESTORED */}
             {activeTab === 'requests' && (
               <motion.div key="requests" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pb-24 md:pb-4">
                 {requests.length === 0 ? (
@@ -333,8 +325,8 @@ export default function HomePage() {
         </main>
       </div>
 
-      {/* 💻 RIGHT SIDEBAR (Active Chat - Desktop Only) */}
-      <div className={`flex-1 h-full bg-[var(--card)] hidden md:flex flex-col relative`}>
+      {/* 💻 RIGHT SIDEBAR (Active Chat View) */}
+      <div className={`flex-1 h-full bg-[var(--card)] ${selectedChat ? 'flex' : 'hidden md:flex'} flex-col relative`}>
         {selectedChat ? (
           <ChatRoom 
             inlineRoomId={selectedChat.roomId} 

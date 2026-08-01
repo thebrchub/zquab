@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import { Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { roomsApi } from '../api/rooms'; // 🛠️ Imported roomsApi
+import { roomsApi } from '../api/rooms';
 
 export default function Navbar() {
   const location = useLocation();
@@ -21,7 +21,6 @@ export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
-  // 🛠️ NEW: Unread Messages State
   const [totalUnread, setTotalUnread] = useState(0);
 
   const isFullUser = user && !user.is_guest;
@@ -30,21 +29,23 @@ export default function Navbar() {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // 🛠️ NEW: Fetch Unread Count on mount & navigation
+  // 🛠️ FIX: Re-fetch whenever location.search changes, with a tiny delay to wait for backend DB sync
   useEffect(() => {
     if (isFullUser) {
-      const fetchUnread = async () => {
-        try {
-          const data = await roomsApi.getRooms();
-          const count = data.rooms?.reduce((acc: number, room: any) => acc + (room.unread_count || 0), 0) || 0;
-          setTotalUnread(count);
-        } catch (err) {
-          console.error('Failed to fetch unread count:', err);
-        }
+      const fetchUnread = () => {
+        setTimeout(async () => {
+          try {
+            const data = await roomsApi.getRooms();
+            const count = data.rooms?.reduce((acc: number, room: any) => acc + (room.unread_count || 0), 0) || 0;
+            setTotalUnread(count);
+          } catch (err) {
+            console.error('Failed to fetch unread count:', err);
+          }
+        }, 150); // Gives the socket time to clear the DB first!
       };
       fetchUnread();
     }
-  }, [isFullUser, location.pathname]); // Refreshes whenever you change pages
+  }, [isFullUser, location.pathname, location.search]);
 
   useEffect(() => {
     if (isStaticPage) {
@@ -122,7 +123,6 @@ export default function Navbar() {
                 <div className="w-24 h-8 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
               ) : isFullUser ? (
                 <>
-                  {/* 🛠️ ADDED UNREAD BADGE TO DESKTOP INBOX */}
                   <Link to="/home" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
                     <div className="relative">
                       <MessageSquare className="w-5 h-5" />
@@ -165,7 +165,6 @@ export default function Navbar() {
               </button>
             )}
 
-            {/* Mobile-Only Icons */}
             <div className="md:hidden flex items-center gap-1 sm:gap-2">
               {isAuthLoading ? (
                 <div className="w-10 h-10 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
@@ -174,7 +173,6 @@ export default function Navbar() {
                   {isFullUser ? (
                     <>
                       <MessageSquare className="w-6 h-6" />
-                      {/* 🛠️ ADDED RED DOT INDICATOR TO MOBILE */}
                       {totalUnread > 0 && (
                         <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 border-2 border-[var(--background)] rounded-full"></span>
                       )}
