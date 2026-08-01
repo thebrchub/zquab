@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom'; // 🛠️ Added useLocation
 import { roomsApi } from '../api/rooms';
-// 🛠️ Assuming you have a friendsApi set up based on the backend docs
 import { friendsApi } from '../api/friends'; 
+import { useWebSocket } from '../context/WebSocketContext'; // 🛠️ Added useWebSocket
 import { Loader2, MessageSquare, Bell, Search, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-// 🛠️ Import ChatRoom to render it inline on desktop!
 import ChatRoom from './ChatRoom'; 
 
-// --- TypeScript Interfaces ---
 interface User {
   name: string;
   avatar_url?: string;
@@ -24,7 +22,6 @@ interface Room {
   unread_count: number;
 }
 
-// 🛠️ Updated to match the Backend's Friend Request shape
 interface FriendRequest {
   request_id: number;
   user_id: string;
@@ -37,7 +34,9 @@ type Tab = 'chats' | 'requests';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const location = useLocation(); // 🛠️ Needed to parse URL parameters
   const { user } = useAuth(); 
+  const { sendMessage, isConnected } = useWebSocket(); // 🛠️ Grab the socket connection
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -45,7 +44,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   
-  // 🛠️ State to track which chat is open on Desktop
   const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, avatar?: string } | null>(null);
 
   useEffect(() => {
@@ -54,7 +52,6 @@ export default function HomePage() {
         setLoading(true);
         const [roomsData, requestsData] = await Promise.all([
           roomsApi.getRooms(),
-          // 🛠️ Fetching Friend Requests instead of Room Requests
           friendsApi.getRequests('received') 
         ]);
 
@@ -71,11 +68,37 @@ export default function HomePage() {
     fetchDashboardData();
   }, []);
 
+  // 🛠️ NEW: Check URL for ?room=xyz parameter so clicking "Message" on a profile auto-opens the chat
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const roomIdParam = params.get('room');
+
+    if (roomIdParam && rooms.length > 0 && !selectedChat) {
+      const room = rooms.find(r => r.room_id === roomIdParam);
+      if (room) {
+        const partnerId = room.member_ids.find(id => id !== (user as any)?.id);
+        const partner = partnerId ? usersMap[partnerId] : null;
+        
+        // Auto-select on desktop
+        if (window.innerWidth >= 768) {
+          setSelectedChat({ roomId: room.room_id, name: partner?.name || 'Unknown', avatar: partner?.avatar_url });
+        }
+
+        // Optimistically clear the unread count locally
+        setRooms(prev => prev.map(r => r.room_id === room.room_id ? { ...r, unread_count: 0 } : r));
+        
+        // Inform the backend that messages have been read
+        if (isConnected) {
+          sendMessage('read', {}, room.room_id);
+        }
+      }
+    }
+  }, [location.search, rooms, selectedChat, user, usersMap, isConnected, sendMessage]);
+
   const handleAcceptRequest = async (username: string) => {
     try {
       await friendsApi.acceptRequest(username);
       setRequests(prev => prev.filter(req => req.username !== username));
-      // Refresh rooms so the new friend's DM shows up
       const roomsData = await roomsApi.getRooms();
       setRooms(roomsData.rooms || []);
       setUsersMap(roomsData.users || {});
@@ -103,6 +126,25 @@ export default function HomePage() {
       : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  // 🛠️ NEW: Centralized Room Click Handler
+  const handleRoomClick = (room: Room, partnerName: string, partnerAvatar?: string) => {
+    // 1. Optimistic UI: Erase unread badge instantly
+    setRooms(prev => prev.map(r => r.room_id === room.room_id ? { ...r, unread_count: 0 } : r));
+
+    // 2. Alert the Backend that the user has seen the chat
+    if (isConnected) {
+      sendMessage('read', {}, room.room_id);
+    }
+
+    // 3. Navigate or Expand
+    if (window.innerWidth >= 768) {
+      setSelectedChat({ roomId: room.room_id, name: partnerName, avatar: partnerAvatar });
+      window.history.replaceState({}, '', `/home?room=${room.room_id}`); // Silently update URL
+    } else {
+      navigate(`/chat/${room.room_id}`, { state: { friendName: partnerName, friendAvatar: partnerAvatar }});
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[100dvh] bg-[var(--background)]">
@@ -113,7 +155,7 @@ export default function HomePage() {
   }
 
   return (
-  <div className="absolute inset-0 flex bg-[var(--background)] overflow-hidden">
+    <div className="absolute inset-0 flex bg-[var(--background)] overflow-hidden">
       
       {/* 📱 / 💻 LEFT SIDEBAR (Inbox / Requests) */}
       <div className={`flex-col h-full bg-[var(--background)] border-r border-[var(--border-color)] transition-all duration-300 ${
@@ -177,25 +219,15 @@ export default function HomePage() {
                 ) : (
                   <div className="divide-y divide-[var(--border-color)]">
                     {rooms.map((room) => {
-                      // 🛠️ Bypassing the TS error with `(user as any)?.id`
                       const partnerId = room.member_ids.find(id => id !== (user as any)?.id);
                       const partner = partnerId ? usersMap[partnerId] : null;
                       const partnerName = partner?.name || 'Unknown User';
-
                       const isSelected = selectedChat?.roomId === room.room_id;
 
                       return (
                         <div 
                           key={room.room_id} 
-                          onClick={() => {
-                            if (window.innerWidth >= 768) {
-                              // Desktop: Open on the right
-                              setSelectedChat({ roomId: room.room_id, name: partnerName, avatar: partner?.avatar_url });
-                            } else {
-                              // Mobile: Navigate to the full page
-                              navigate(`/chat/${room.room_id}`, { state: { friendName: partnerName, friendAvatar: partner?.avatar_url }});
-                            }
-                          }}
+                          onClick={() => handleRoomClick(room, partnerName, partner?.avatar_url)} // 🛠️ Uses the new robust click handler
                           className={`p-4 transition-colors flex items-center gap-4 cursor-pointer ${
                             isSelected ? 'bg-[var(--card)] border-l-4 border-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
                           }`}
@@ -304,7 +336,6 @@ export default function HomePage() {
       {/* 💻 RIGHT SIDEBAR (Active Chat - Desktop Only) */}
       <div className={`flex-1 h-full bg-[var(--card)] hidden md:flex flex-col relative`}>
         {selectedChat ? (
-           // 🛠️ Passing the selected chat data as props!
           <ChatRoom 
             inlineRoomId={selectedChat.roomId} 
             inlineFriendName={selectedChat.name}

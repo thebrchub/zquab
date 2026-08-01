@@ -3,13 +3,13 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import { Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { roomsApi } from '../api/rooms'; // 🛠️ Imported roomsApi
 
 export default function Navbar() {
   const location = useLocation();
   const isChatPage = location.pathname === '/chat';
   const isHomePage = location.pathname === '/home';
   
-  // 🛠️ SMART SCROLL CHECK: Identify if we are on an app-like static page
   const isStaticPage = isChatPage || isHomePage;
   
   const { user, loginAsGuest, isLoading: isAuthLoading } = useAuth();
@@ -18,9 +18,11 @@ export default function Navbar() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 🛠️ SCROLL STATE
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+
+  // 🛠️ NEW: Unread Messages State
+  const [totalUnread, setTotalUnread] = useState(0);
 
   const isFullUser = user && !user.is_guest;
 
@@ -28,7 +30,22 @@ export default function Navbar() {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // 🛠️ SMART SCROLL LOGIC
+  // 🛠️ NEW: Fetch Unread Count on mount & navigation
+  useEffect(() => {
+    if (isFullUser) {
+      const fetchUnread = async () => {
+        try {
+          const data = await roomsApi.getRooms();
+          const count = data.rooms?.reduce((acc: number, room: any) => acc + (room.unread_count || 0), 0) || 0;
+          setTotalUnread(count);
+        } catch (err) {
+          console.error('Failed to fetch unread count:', err);
+        }
+      };
+      fetchUnread();
+    }
+  }, [isFullUser, location.pathname]); // Refreshes whenever you change pages
+
   useEffect(() => {
     if (isStaticPage) {
       setIsVisible(true);
@@ -78,7 +95,6 @@ export default function Navbar() {
       <div className="w-full px-4 md:px-8 lg:px-12 xl:px-16 relative">
         <div className="flex justify-between items-center h-16 sm:h-20">
           
-          {/* Left: Logo & Text (Consistently on the left now) */}
           <Link to="/" className="flex items-center gap-3 z-10">
             <img 
               src="/logo.png" 
@@ -90,10 +106,8 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Right: Controls & Routing */}
           <div className="flex items-center gap-2 sm:gap-6 ml-auto z-10">
             
-            {/* Desktop Navigation Links */}
             <div className="hidden md:flex items-center gap-8 mr-4">
               <Link to="/about" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
                 <Info className="w-5 h-5" /> About
@@ -108,8 +122,17 @@ export default function Navbar() {
                 <div className="w-24 h-8 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
               ) : isFullUser ? (
                 <>
+                  {/* 🛠️ ADDED UNREAD BADGE TO DESKTOP INBOX */}
                   <Link to="/home" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                    <MessageSquare className="w-5 h-5" /> Inbox
+                    <div className="relative">
+                      <MessageSquare className="w-5 h-5" />
+                      {totalUnread > 0 && (
+                        <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-[var(--background)]">
+                          {totalUnread > 9 ? '9+' : totalUnread}
+                        </span>
+                      )}
+                    </div>
+                    Inbox
                   </Link>
                   <Link to="/profile" className="flex items-center gap-2.5 text-base text-[var(--text-main)] hover:text-[#3B82F6] font-bold transition-colors py-2">
                     <User className="w-5 h-5" /> Profile
@@ -122,7 +145,6 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* 🛠️ FRICTIONLESS GLOBAL SEARCH + THEME TOGGLE */}
             <div className="flex items-center gap-1 sm:gap-2">
               <Link to="/search" className="p-2 sm:p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95" aria-label="Search">
                 <Search className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -130,7 +152,6 @@ export default function Navbar() {
               <ThemeToggle />
             </div>
 
-            {/* 🛠️ Primary CTA Button (Now always visible, dynamic text based on auth) */}
             {isAuthLoading ? (
               <div className="hidden md:block w-32 h-11 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
             ) : (
@@ -149,8 +170,16 @@ export default function Navbar() {
               {isAuthLoading ? (
                 <div className="w-10 h-10 bg-[var(--background)] border border-[var(--border-color)] animate-pulse rounded-full"></div>
               ) : (
-                <Link to={isFullUser ? "/home" : "/auth"} className="p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95">
-                  {isFullUser ? <MessageSquare className="w-6 h-6" /> : <User className="w-6 h-6" />}
+                <Link to={isFullUser ? "/home" : "/auth"} className="relative p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95">
+                  {isFullUser ? (
+                    <>
+                      <MessageSquare className="w-6 h-6" />
+                      {/* 🛠️ ADDED RED DOT INDICATOR TO MOBILE */}
+                      {totalUnread > 0 && (
+                        <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 border-2 border-[var(--background)] rounded-full"></span>
+                      )}
+                    </>
+                  ) : <User className="w-6 h-6" />}
                 </Link>
               )}
               
@@ -166,7 +195,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Hamburger Menu Dropdown */}
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-[100%] left-0 w-full bg-[var(--card)] border-b border-[var(--border-color)] shadow-xl flex flex-col p-4 gap-2 z-40">
           <Link to="/about" className="flex items-center gap-3 p-4 text-[var(--text-main)] font-bold text-lg rounded-xl hover:bg-[var(--background)] transition-colors">
@@ -184,7 +212,6 @@ export default function Navbar() {
             </Link>
           )}
 
-          {/* 🛠️ Mobile CTA Button restored and dynamic */}
           {!isAuthLoading && (
             <div className="mt-4 pt-4 border-t border-[var(--border-color)]">
               <button
