@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Loader2, User, ChevronRight, X, Copy, CheckCircle2 } from 'lucide-react';
+import { Search, Loader2, User, ChevronRight, X, Copy, CheckCircle2, History } from 'lucide-react';
 import { usersApi } from '../api/users'; 
 import { useAuth } from '../context/AuthContext';
 
@@ -10,7 +10,7 @@ interface SearchResult {
   username: string;
   avatar_url: string;
   is_private: boolean;
-  is_online?: boolean; // 🛠️ 1. Added the online flag to the interface
+  is_online?: boolean;
 }
 
 export default function SearchPage() {
@@ -20,6 +20,16 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // 🛠️ NEW: Recent Searches state initialized from localStorage
+  const [recentSearches, setRecentSearches] = useState<SearchResult[]>(() => {
+    try {
+      const saved = localStorage.getItem('zquab_recent_searches');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     const trimmedQuery = query.trim();
@@ -48,6 +58,27 @@ export default function SearchPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [query]);
 
+  // 🛠️ NEW: Save user to recent searches when clicked
+  const handleSelectUser = (clickedUser: SearchResult) => {
+    setRecentSearches((prev) => {
+      // Remove if already exists to push it to the top, then slice to keep max 5 items
+      const filtered = prev.filter((item) => item.username !== clickedUser.username);
+      const updated = [clickedUser, ...filtered].slice(0, 5);
+      localStorage.setItem('zquab_recent_searches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // 🛠️ NEW: Remove single item from recent searches
+  const handleRemoveRecent = (e: React.MouseEvent, usernameToRemove: string) => {
+    e.preventDefault(); // Prevent navigating to the profile when clicking the 'X'
+    setRecentSearches((prev) => {
+      const updated = prev.filter((item) => item.username !== usernameToRemove);
+      localStorage.setItem('zquab_recent_searches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const handleCopyLink = () => {
     if (!user?.username) return;
     const profileUrl = `${window.location.origin}/user/${user.username}`;
@@ -59,7 +90,7 @@ export default function SearchPage() {
   return (
     <div className="max-w-2xl mx-auto w-full px-4 sm:px-6 pt-12 pb-24">
       
-      {/* 1. Header (Typography & Whitespace driving hierarchy) */}
+      {/* 1. Header */}
       <div className="mb-10 text-center sm:text-left">
         <h1 className="text-3xl sm:text-4xl font-black text-[var(--text-main)] tracking-tight mb-2">
           Find Someone
@@ -70,7 +101,7 @@ export default function SearchPage() {
       </div>
 
       {/* 2. The Tool (Search Bar) */}
-      <div className="relative mb-12">
+      <div className="relative mb-8">
         <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
           <Search className="w-6 h-6 text-[var(--text-muted)]" />
         </div>
@@ -92,7 +123,7 @@ export default function SearchPage() {
         )}
       </div>
 
-      {/* 3. Dynamic Area (Results OR Minimal Empty State) */}
+      {/* 3. Dynamic Area */}
       <div className="space-y-3">
         {error && (
           <div className="py-4 text-red-500 text-center text-sm font-medium">
@@ -106,15 +137,15 @@ export default function SearchPage() {
           </div>
         ) : query.trim() !== '' ? (
           
-          // SEARCH RESULTS (Takes over 85% of focus when active)
+          // SEARCH RESULTS
           results.length > 0 ? (
             results.map((result) => (
               <Link 
                 key={result.id} 
                 to={`/user/${result.username}`}
+                onClick={() => handleSelectUser(result)}
                 className="flex items-center p-4 bg-[var(--card)] border border-[var(--border-color)] rounded-2xl hover:border-[#3B82F6] transition-all group active:scale-[0.98]"
               >
-                {/* 🛠️ 2. Wrapped the avatar in a relative div and added the green online dot */}
                 <div className="relative flex-shrink-0">
                   <div className="w-14 h-14 rounded-full bg-[var(--background)] overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
                     {result.avatar_url ? (
@@ -143,10 +174,53 @@ export default function SearchPage() {
           )
         ) : (
           
-          // PREMIUM EMPTY STATE (No bulky cards, just typography and whitespace)
-          <div className="animate-in fade-in slide-in-from-bottom-4 px-2 sm:px-4">
-            <div className="space-y-10">
-              
+          // DEFAULT STATE: RECENT SEARCHES + TIPS
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8">
+            
+            {/* Recent Searches Section */}
+            {recentSearches.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1 text-sm font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                  <History className="w-4 h-4" /> Recent Profiles
+                </div>
+                <div className="space-y-2">
+                  {recentSearches.map((item) => (
+                    <div 
+                      key={item.username}
+                      className="flex items-center justify-between p-3 bg-[var(--card)] border border-[var(--border-color)] rounded-2xl hover:border-[#3B82F6] transition-all group"
+                    >
+                      <Link 
+                        to={`/user/${item.username}`}
+                        className="flex items-center gap-3 flex-1 min-w-0"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-[var(--background)] overflow-hidden flex items-center justify-center border border-[var(--border-color)] flex-shrink-0">
+                          {item.avatar_url ? (
+                            <img src={item.avatar_url} alt={item.username} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-5 h-5 text-[var(--text-muted)]" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-[var(--text-main)] text-sm truncate">{item.name || item.username}</h4>
+                          <p className="text-xs text-[var(--text-muted)] truncate">@{item.username}</p>
+                        </div>
+                      </Link>
+
+                      {/* Cross mark button to delete individual history item */}
+                      <button 
+                        onClick={(e) => handleRemoveRecent(e, item.username)}
+                        className="p-2 text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors"
+                        title="Remove from history"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="px-2 sm:px-4 space-y-10 pt-4">
               {/* Minimal Rule Set */}
               <div className="text-center sm:text-left">
                 <p className="text-[var(--text-main)] text-lg font-bold mb-1">Search by exact username.</p>
@@ -176,8 +250,8 @@ export default function SearchPage() {
                   )}
                 </button>
               </div>
-
             </div>
+
           </div>
         )}
       </div>
