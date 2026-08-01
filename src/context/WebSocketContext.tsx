@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import protobuf from 'protobufjs';
 import chatProtoSrc from '../proto/chat.proto?raw';
 
@@ -120,7 +120,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const sendMessage = (type: string, payload?: any, roomId?: string, to?: string, id?: string) => {
+  // useCallback (stable reference) — an unstable sendMessage here caused the
+  // WebSocketContext value to change on every render, which made consumer
+  // effects that depend on it re-fire for messages they'd already processed.
+  const sendMessage = useCallback((type: string, payload?: any, roomId?: string, to?: string, id?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('Cannot send message: WebSocket is not open');
       return undefined;
@@ -161,10 +164,17 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       console.error('Failed to encode/send message:', err);
       return undefined;
     }
-  };
+  }, []);
+
+  // Memoize the context value — a fresh object every render caused every
+  // consumer to re-render (and re-fire effects) on unrelated WS traffic.
+  const value = useMemo(
+    () => ({ isConnected, sendMessage, lastMessage }),
+    [isConnected, sendMessage, lastMessage]
+  );
 
   return (
-    <WebSocketContext.Provider value={{ isConnected, sendMessage, lastMessage }}>
+    <WebSocketContext.Provider value={value}>
       {children}
     </WebSocketContext.Provider>
   );

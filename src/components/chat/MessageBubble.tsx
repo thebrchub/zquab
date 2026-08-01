@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react';
+import { memo } from 'react';
 
 interface Props {
   message?: string;
@@ -17,7 +18,7 @@ const isOnlyEmojis = (str: string) => {
   return emojiRegex.test(str);
 };
 
-export default function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImageClick, isUploading }: Props) {
+function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImageClick, isUploading }: Props) {
   const displayText = content || message || '';
   const formattedTime = time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   
@@ -94,3 +95,5 @@ export default function MessageBubble({ message, content, isOwn, status, time, i
     </div>
   );
 }
+
+export default memo(MessageBubble);

@@ -29,21 +29,23 @@ export default function Navbar() {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // 🛠️ FIX: Re-fetch whenever location.search changes, with a tiny delay to wait for backend DB sync
+  // Re-fetch whenever location.search changes. Fetch immediately for
+  // responsiveness, then re-check after the backend's ~3s flush interval —
+  // 150ms was ~20x too short to reflect a just-sent read receipt.
   useEffect(() => {
     if (isFullUser) {
-      const fetchUnread = () => {
-        setTimeout(async () => {
-          try {
-            const data = await roomsApi.getRooms();
-            const count = data.rooms?.reduce((acc: number, room: any) => acc + (room.unread_count || 0), 0) || 0;
-            setTotalUnread(count);
-          } catch (err) {
-            console.error('Failed to fetch unread count:', err);
-          }
-        }, 150); // Gives the socket time to clear the DB first!
+      const fetchUnread = async () => {
+        try {
+          const data = await roomsApi.getRooms();
+          const count = data.rooms?.reduce((acc: number, room: any) => acc + (room.unread_count || 0), 0) || 0;
+          setTotalUnread(count);
+        } catch (err) {
+          console.error('Failed to fetch unread count:', err);
+        }
       };
       fetchUnread();
+      const timeoutId = setTimeout(fetchUnread, 3500);
+      return () => clearTimeout(timeoutId);
     }
   }, [isFullUser, location.pathname, location.search]);
 

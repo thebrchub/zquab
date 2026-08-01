@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
@@ -59,6 +59,13 @@ export default function ChatRoom({
 
   const sentMessageIdsRef = useRef<Set<string>>(new Set());
 
+  // Keeps the IntersectionObserver's callback reading fresh data without
+  // needing `messages` in that effect's own dependency array.
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  const handleImageClick = useCallback((url: string) => setViewingImage(url), []);
+
   // 🛠️ FETCH HISTORY & MERGE OPTIMISTIC MESSAGES
   useEffect(() => {
     if (isDevMode) {
@@ -89,14 +96,22 @@ export default function ChatRoom({
           };
         });
 
-        // 🛠️ SESSION RECONCILIATION: Grab optimistic messages that haven't hit DB yet
+        // 🛠️ SESSION RECONCILIATION: Grab optimistic messages that haven't hit DB yet.
+        // NOTE: can't match by id here — history ids are server BIGSERIAL
+        // integers, optimistic ids are client-generated UUIDs; they can
+        // never be equal. Match by sender+content+time-proximity instead.
         const storedOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
-        const historyIds = new Set(formattedHistory.map((m: any) => m.id));
-        
-        // Filter out stored messages that are now officially in the backend history or are too old (>10s)
+
         const pendingOpts = storedOpts.filter((opt: any) => {
           const age = Date.now() - new Date(opt.created_at).getTime();
-          return !historyIds.has(opt.id) && age < 10000;
+          if (age >= 10000) return false;
+          const optTime = new Date(opt.created_at).getTime();
+          const alreadyLanded = formattedHistory.some((m: any) =>
+            m.isOwn &&
+            m.content === opt.content &&
+            Math.abs(new Date(m.created_at).getTime() - optTime) < 15000
+          );
+          return !alreadyLanded;
         });
         
         sessionStorage.setItem(`opts_${roomId}`, JSON.stringify(pendingOpts));
@@ -127,11 +142,20 @@ export default function ChatRoom({
 
   // 🛠️ WEBSOCKET MESSAGE HANDLER
   useEffect(() => {
-    if (isDevMode || !lastMessage || !roomId) return;
-    
+    if (isDevMode || !lastMessage) return;
+
+    // send_confirm carries no room_id (it's a direct ack to the sender), so
+    // it must be handled before the room-id match check below, and its real
+    // wire type is 'send_confirm' — not the old 'message_sent_confirm' name.
+    if (lastMessage.type === 'send_confirm') {
+      if (lastMessage.id) sentMessageIdsRef.current.delete(lastMessage.id);
+      return;
+    }
+
+    if (!roomId) return;
+
     if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
-      // 🛠️ FIXED: Replaced 'message_delivered' with 'delivered'
-      if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered' || lastMessage.type === 'message_sent_confirm') {
+      if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered') {
         if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
           sentMessageIdsRef.current.delete(lastMessage.id);
           return;
@@ -184,10 +208,11 @@ export default function ChatRoom({
 
     const observer = new IntersectionObserver(
       async (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && messages.length > 0) {
+        const currentMessages = messagesRef.current;
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && currentMessages.length > 0) {
           setLoadingMore(true);
           try {
-            const oldestId = messages[0].id;
+            const oldestId = currentMessages[0].id;
             const olderMessages = await roomsApi.getMessages(roomId!, oldestId);
             if (olderMessages.length < 50) setHasMore(false);
             
@@ -219,7 +244,9 @@ export default function ChatRoom({
     return () => {
       if (topObserverRef.current) observer.unobserve(topObserverRef.current);
     };
-  }, [hasMore, loadingMore, loading, messages, roomId, isDevMode, user]);
+    // messages intentionally excluded — read via messagesRef instead, so this
+    // observer isn't torn down/recreated on every single new message.
+  }, [hasMore, loadingMore, loading, roomId, isDevMode, user]);
 
   const handleTyping = () => {
     if (isDevMode || !isConnected) return;
@@ -429,7 +456,7 @@ export default function ChatRoom({
                 status={msg.status}
                 time={msg.created_at}
                 imageUrl={(msg as any).imageUrl}
-                onImageClick={(url) => setViewingImage(url!)}
+                onImageClick={handleImageClick}
               />
             ))}
             

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
@@ -39,7 +39,7 @@ export default function HomePage() {
   const { user } = useAuth(); 
   
   // 🛠️ RESTORED THE HOOK
-  const { sendMessage, isConnected } = useWebSocket(); 
+  const { sendMessage, isConnected, lastMessage } = useWebSocket(); 
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -48,6 +48,18 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   
   const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string, isOnline?: boolean } | null>(null);
+
+  // Silent (no loading spinner) rooms refetch — reused for mount, friend-accept,
+  // and live WS-triggered resyncs, so the inbox list isn't just a one-shot snapshot.
+  const refreshRooms = useCallback(async () => {
+    try {
+      const roomsData = await roomsApi.getRooms();
+      setRooms(roomsData.rooms || []);
+      setUsersMap(prev => ({ ...prev, ...(roomsData.users || {}) }));
+    } catch (err) {
+      console.error('Failed to refresh rooms:', err);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -69,6 +81,39 @@ export default function HomePage() {
     };
     fetchDashboardData();
   }, []);
+
+  // Live resync via WebSocket data only — no REST call. A new chat_message
+  // patches the matching room's preview/timestamp/unread_count in place and
+  // re-sorts by recency, instead of leaving `rooms` frozen at the initial
+  // mount-time snapshot (or re-hitting the REST API on every WS event).
+  useEffect(() => {
+    if (!lastMessage || lastMessage.type !== 'chat_message') return;
+
+    const msgRoomId = lastMessage.room_id || lastMessage.roomId;
+    if (!msgRoomId) return;
+
+    const myId = (user as any)?.user_id || (user as any)?.id;
+    const msgSender = lastMessage.sender_id || lastMessage.from;
+    const isOwn = Boolean(msgSender && myId && msgSender === myId);
+    const isOpenRoom = selectedChat?.roomId === msgRoomId;
+    const parsedTs = Number(lastMessage.ts);
+    const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
+
+    setRooms(prevRooms => {
+      const idx = prevRooms.findIndex(r => r.room_id === msgRoomId);
+      if (idx === -1) return prevRooms; // unknown room — next full load will pick it up
+
+      const updatedRoom = {
+        ...prevRooms[idx],
+        last_message_preview: lastMessage.payload?.text ?? prevRooms[idx].last_message_preview,
+        last_message_at: new Date(tsMs).toISOString(),
+        unread_count: (!isOwn && !isOpenRoom) ? prevRooms[idx].unread_count + 1 : prevRooms[idx].unread_count,
+      };
+
+      const rest = prevRooms.filter((_, i) => i !== idx);
+      return [updatedRoom, ...rest];
+    });
+  }, [lastMessage, user, selectedChat?.roomId]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -121,9 +166,7 @@ export default function HomePage() {
     try {
       await friendsApi.acceptRequest(username);
       setRequests(prev => prev.filter(req => req.username !== username));
-      const roomsData = await roomsApi.getRooms();
-      setRooms(roomsData.rooms || []);
-      setUsersMap(roomsData.users || {});
+      await refreshRooms();
     } catch (err) {
       console.error('Failed to accept request:', err);
     }

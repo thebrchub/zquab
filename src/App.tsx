@@ -1,29 +1,39 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import { ThemeProvider } from './hooks/useTheme';
 import RootLayout from './layout/RootLayout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WebSocketProvider } from './context/WebSocketContext';
 import { Loader2 } from 'lucide-react';
 
-// Public/Static Pages
-import LandingPage from './pages/LandingPage';
-import ChatPage from './pages/ChatPage';
-import AuthPage from './pages/AuthPage';
-import BlogPage from './pages/BlogPage';
-import Terms from './pages/Terms';
-import Privacy from './pages/Privacy';
-import Safety from './pages/Safety';
-import About from './pages/About';
-import Contact from './pages/Contact';
+// Route-level code splitting — each page is only fetched when its route is
+// actually visited, instead of every page bundling into the initial load.
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const BlogPage = lazy(() => import('./pages/BlogPage'));
+const Terms = lazy(() => import('./pages/Terms'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Safety = lazy(() => import('./pages/Safety'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
 
 // Protected App Pages
-import OnboardingPage from './pages/OnboardingPage'; 
-import HomePage from './pages/HomePage';
-import ChatRoom from './pages/ChatRoom';
-import Profile from './pages/Profile';
-import UserProfile from './pages/UserProfile';
-import SearchPage from './pages/SearchPage';
-import NotFoundPage from './pages/NotFoundPage';
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
+const ChatRoom = lazy(() => import('./pages/ChatRoom'));
+const Profile = lazy(() => import('./pages/Profile'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const SearchPage = lazy(() => import('./pages/SearchPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
+function RouteFallback() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[100dvh] bg-[var(--background)]">
+      <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
+    </div>
+  );
+}
 
 // 1. Protected Route Wrapper (For standard logged-in pages)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -86,6 +96,7 @@ function App() {
       <AuthProvider>
         <WebSocketProvider>
           <BrowserRouter>
+            <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route element={<RootLayout />}>
                 
@@ -166,6 +177,7 @@ function App() {
               <Route path="/dev/profile" element={<Profile />} />
 
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </WebSocketProvider>
       </AuthProvider>
