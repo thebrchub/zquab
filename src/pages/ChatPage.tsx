@@ -147,7 +147,10 @@ export default function ChatPage() {
     return new ChatClient({
       onStatusChange: setStatus,
       onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
-      onSystemMessage: (text) => console.log('[Chat System]:', text),
+      onSystemMessage: (text) => {
+        console.log('[Chat System]:', text);
+        setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]);
+      },
       onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername) => {
         setPartnerUsername(partnerUsername);
         if (!partnerLocation) {
