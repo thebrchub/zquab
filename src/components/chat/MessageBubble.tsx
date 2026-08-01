@@ -7,7 +7,7 @@ interface Props {
   status?: 'sent' | 'delivered' | 'read';
   time?: string;
   imageUrl?: string;
-  onImageClick?: () => void; 
+  onImageClick?: (url: string) => void; 
   isUploading?: boolean; // 🛠️ ADDED: Track uploading state
 }
 
@@ -32,7 +32,7 @@ export default function MessageBubble({ message, content, isOwn, status, time, i
           <img 
             src={imageUrl} 
             alt="Shared photo" 
-            onClick={!isUploading ? onImageClick : undefined} // Prevent clicking while uploading
+            onClick={!isUploading ? () => onImageClick?.(imageUrl) : undefined}
             className={`w-full h-auto object-cover shadow-sm border border-[var(--border-color)] transition-all duration-300 ${
               isUploading 
                 ? 'opacity-60 blur-sm grayscale-[30%]' // 🛠️ Blurs the image while uploading

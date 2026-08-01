@@ -4,9 +4,10 @@ import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
-import { Loader2, ArrowLeft, MoreVertical, User } from 'lucide-react';
+import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import { useAuth } from '../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatRoom({ 
   inlineRoomId, 
@@ -47,6 +48,10 @@ export default function ChatRoom({
   const topObserverRef = useRef<HTMLDivElement>(null);
   const { isConnected, sendMessage, lastMessage } = useWebSocket();
   const { user } = useAuth();
+
+  // Image viewing
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
@@ -235,6 +240,36 @@ export default function ChatRoom({
     }, 100);
   };
 
+  const handleRequestAttachment = () => {
+    photoFileInputRef.current?.click();
+  };
+
+  const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    // Show temporary image locally
+    const localPreviewUrl = URL.createObjectURL(file);
+    const tempId = `msg-img-${Date.now()}`;
+    
+    setMessages((prev) => [...prev, {
+      id: tempId,
+      content: '',
+      created_at: new Date().toISOString(),
+      isOwn: true,
+      status: 'sent',
+      imageUrl: localPreviewUrl
+    }]);
+
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, 100);
+
+    // TODO: Send file to backend when image upload endpoint is ready
+    // For now, the image displays locally
+  };
+
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[var(--background)]">
@@ -256,6 +291,45 @@ export default function ChatRoom({
 
   return (
   <div className="flex-1 flex flex-col bg-[var(--background)] w-full h-full overflow-hidden relative">
+      
+      {/* Image Lightbox */}
+      <AnimatePresence>
+        {viewingImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setViewingImage(null)}
+            className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+          >
+            <button
+              onClick={() => setViewingImage(null)}
+              className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              src={viewingImage}
+              alt="Fullscreen view"
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hidden file input */}
+      <input
+        ref={photoFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoSelected}
+        className="hidden"
+      />
       
       <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -311,6 +385,8 @@ export default function ChatRoom({
                 isOwn={msg.isOwn}
                 status={msg.status}
                 time={msg.created_at}
+                imageUrl={(msg as any).imageUrl}
+                onImageClick={(url) => setViewingImage(url)}
               />
             ))}
             
@@ -325,7 +401,9 @@ export default function ChatRoom({
         <ChatInput 
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
-          onTyping={handleTyping} 
+          onTyping={handleTyping}
+          onRequestPhoto={handleRequestAttachment}
+          photoRequestDisabled={false}
         />
       </div>
       
