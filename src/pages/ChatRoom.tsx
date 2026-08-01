@@ -18,53 +18,38 @@ export default function ChatRoom({
   inlineFriendName?: string, 
   inlineFriendAvatar?: string 
 } = {}) {
-  // const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 🛠️ Use inline props first (Desktop Split-Screen), fallback to router params (Mobile)
   const routerParams = useParams<{ roomId: string }>();
   const roomId = inlineRoomId || routerParams.roomId;
   
   const friendName = inlineFriendName || location.state?.friendName || 'Chat Room';
   const friendAvatar = inlineFriendAvatar || location.state?.friendAvatar || null;
   
-  // 🛠️ Grab the friend's details passed from the Inbox!
-
-
-  
-  // DEV MODE CHECK
   const isDevMode = location.pathname === '/dev/chat';
   
-  // State
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState('');
   
-  // Refs for scrolling and WebSocket
   const scrollRef = useRef<HTMLDivElement>(null);
   const topObserverRef = useRef<HTMLDivElement>(null);
   const { isConnected, sendMessage, lastMessage } = useWebSocket();
   const { user } = useAuth();
 
-  // Image viewing
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Typing State
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const partnerTypingTimeoutRef = useRef<number | null>(null);
   const myTypingTimeoutRef = useRef<number | null>(null);
   const isMyTypingStateRef = useRef(false);
 
-  // IDs of messages this device has sent and already shown optimistically
-  // — lets us recognize "this is just my own echo" (skip) vs. "this is the
-  // same account messaging from a different device" (show, as own).
   const sentMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // 1. Initial Load of History
   useEffect(() => {
     if (isDevMode) {
       setMessages([
@@ -108,29 +93,16 @@ export default function ChatRoom({
     };
   }, [roomId, isConnected, isDevMode]);
 
-  // 2. Listen for Live WebSocket Messages
   useEffect(() => {
     if (isDevMode || !lastMessage || !roomId) return;
     
     if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
-      // 'chat_message' is what the backend actually sends (go-starter-kit
-      // chat.MsgChatMessage) — 'message_delivered'/'message_sent_confirm'
-      // were never real wire types, kept only as harmless legacy fallbacks.
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
-        // The engine broadcasts a sent message to every room member,
-        // including the sender's own connection (intentional — lets the
-        // same account see its own messages on other logged-in devices
-        // too). Only skip it if THIS device already showed it optimistically
-        // (matched by id); otherwise show it, marked own via `from`.
         if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
           sentMessageIdsRef.current.delete(lastMessage.id);
           return;
         }
 
-        // envelope.ts is an int64 — protobufjs decodes it as a Long object,
-        // not a plain number; new Date(Long) is an Invalid Date and
-        // .toISOString() throws. Number(...) coerces Long via its
-        // toString() correctly; fall back to now() if it's ever missing/NaN.
         const parsedTs = Number(lastMessage.ts);
         const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
         const isOwn = Boolean(lastMessage.from && user?.user_id && lastMessage.from === user.user_id);
@@ -165,7 +137,6 @@ export default function ChatRoom({
     }
   }, [lastMessage, roomId, isDevMode]);
 
-  // 3. Infinite Scroll
   useEffect(() => {
     if (isDevMode) return;
 
@@ -249,7 +220,6 @@ export default function ChatRoom({
     e.target.value = '';
     if (!file) return;
 
-    // Show temporary image locally
     const localPreviewUrl = URL.createObjectURL(file);
     const tempId = `msg-img-${Date.now()}`;
     
@@ -265,9 +235,6 @@ export default function ChatRoom({
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, 100);
-
-    // TODO: Send file to backend when image upload endpoint is ready
-    // For now, the image displays locally
   };
 
   if (loading) {
@@ -290,9 +257,9 @@ export default function ChatRoom({
   }
 
   return (
-  <div className="flex-1 flex flex-col bg-[var(--background)] w-full h-full overflow-hidden relative">
+    // 🛠️ FIXED: Added h-[calc(100dvh-64px)] on mobile to lock the screen size, and min-h-0
+    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] md:h-full overflow-hidden relative min-h-0">
       
-      {/* Image Lightbox */}
       <AnimatePresence>
         {viewingImage && (
           <motion.div
@@ -322,7 +289,6 @@ export default function ChatRoom({
         )}
       </AnimatePresence>
 
-      {/* Hidden file input */}
       <input
         ref={photoFileInputRef}
         type="file"
@@ -331,7 +297,7 @@ export default function ChatRoom({
         className="hidden"
       />
       
-      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2">
+      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2 z-10">
         <div className="flex items-center gap-2 min-w-0">
           <button 
             onClick={() => navigate(-1)} 
@@ -341,7 +307,6 @@ export default function ChatRoom({
           </button>
           
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {/* 🛠️ Friend Avatar Display */}
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0 flex items-center justify-center">
               {friendAvatar ? (
                 <img src={friendAvatar} alt={friendName} className="w-full h-full object-cover" />
@@ -350,7 +315,6 @@ export default function ChatRoom({
               )}
             </div>
             <div className="flex flex-col justify-center min-w-0">
-              {/* 🛠️ Dynamic Friend Name - Truncated on mobile */}
               <h2 className="font-bold text-[var(--text-main)] leading-tight text-sm sm:text-lg truncate">
                 {isDevMode ? 'UI Testing Room' : friendName}
               </h2>
@@ -364,9 +328,10 @@ export default function ChatRoom({
         </button>
       </div>
 
+      {/* 🛠️ FIXED: Added min-h-0 to the scroll container to ensure flexbox constraints */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)]"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0"
       >
         <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2">
           {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
@@ -386,7 +351,7 @@ export default function ChatRoom({
                 status={msg.status}
                 time={msg.created_at}
                 imageUrl={(msg as any).imageUrl}
-                onImageClick={(url) => setViewingImage(url)}
+                onImageClick={(url) => setViewingImage(url!)}
               />
             ))}
             
@@ -397,13 +362,12 @@ export default function ChatRoom({
         )}
       </div>
 
-      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe">
+      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10">
         <ChatInput 
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
           onTyping={handleTyping}
-          onRequestPhoto={handleRequestAttachment}
-          photoRequestDisabled={false}
+          onDirectImageClick={handleRequestAttachment} // 🛠️ FIXED: Bypass the Stranger drawer for direct file picks
         />
       </div>
       
