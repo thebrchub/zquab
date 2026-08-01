@@ -8,7 +8,7 @@ interface Props {
   time?: string;
   imageUrl?: string;
   onImageClick?: (url: string) => void; 
-  isUploading?: boolean; // 🛠️ ADDED: Track uploading state
+  isUploading?: boolean;
 }
 
 const isOnlyEmojis = (str: string) => {
@@ -35,12 +35,11 @@ export default function MessageBubble({ message, content, isOwn, status, time, i
             onClick={!isUploading ? () => onImageClick?.(imageUrl) : undefined}
             className={`w-full h-auto object-cover shadow-sm border border-[var(--border-color)] transition-all duration-300 ${
               isUploading 
-                ? 'opacity-60 blur-sm grayscale-[30%]' // 🛠️ Blurs the image while uploading
+                ? 'opacity-60 blur-sm grayscale-[30%]' 
                 : 'cursor-zoom-in hover:opacity-90 active:scale-[0.98]'
             }`} 
           />
           
-          {/* 🛠️ The Loading Overlay */}
           {isUploading && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="bg-black/60 p-3 sm:p-4 rounded-full backdrop-blur-md flex flex-col items-center justify-center shadow-2xl">
@@ -58,14 +57,15 @@ export default function MessageBubble({ message, content, isOwn, status, time, i
           className={`max-w-[75%] md:max-w-[65%] flex flex-col relative
             ${emojiOnly 
               ? 'bg-transparent text-4xl leading-tight'
-              : `rounded-2xl px-4 py-2.5 shadow-sm text-sm md:text-base leading-relaxed break-words
+              : `rounded-2xl px-4 py-2.5 shadow-sm text-sm md:text-base leading-relaxed
                  ${isOwn 
                    ? 'bg-[#3B82F6] text-white rounded-tr-sm' 
                    : 'bg-[var(--card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-tl-sm'
                  }`
             }`}
         >
-          <p>{displayText}</p>
+          {/* 🛠️ FIXED: Added break-all and whitespace-pre-wrap to strictly enforce boundaries and line-breaks */}
+          <p className="break-words break-all whitespace-pre-wrap">{displayText}</p>
           
           {formattedTime && !emojiOnly && (
             <div className={`flex items-center gap-1.5 mt-1 text-[10px] uppercase font-bold self-end
