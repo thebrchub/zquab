@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, MessageSquare, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../context/AuthContext';
@@ -59,12 +59,12 @@ export default function Hero() {
               transition={{ duration: 0.6, ease: "easeOut" }}
               className="lg:col-span-7"
             >
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)]/80 backdrop-blur-sm text-sm font-medium text-[var(--text-main)] mb-8 border border-[var(--border-color)]">
+              {/* 🛠️ ADDED: flex w-fit mx-auto md:mx-0 */}
+              <div className="flex w-fit mx-auto md:mx-0 items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)]/80 backdrop-blur-sm text-sm font-medium text-[var(--text-main)] mb-8 border border-[var(--border-color)]">
                 <span className="flex h-2.5 w-2.5 rounded-full bg-[#3B82F6] animate-pulse"></span>
                 zQuab v1.0 is live
               </div>
               
-              {/* 🛠️ ADDED: text-center md:text-left */}
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6 text-[var(--text-main)] text-center md:text-left">
                 Meet someone <br />
                 <span className="text-[#3B82F6]">new in seconds.</span>
@@ -109,7 +109,7 @@ export default function Hero() {
                     <div className="w-3 h-3 rounded-full bg-[var(--border-color)]"></div>
                   </div>
                   <div className="mx-auto flex items-center gap-2 text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">
-                    zQuab Preview
+                   zQuab Preview
                   </div>
                 </div>
                 
