@@ -45,7 +45,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   
-  // 🛠️ 1. Add isOnline to the state interface
   const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string, isOnline?: boolean } | null>(null);
 
   useEffect(() => {
@@ -69,14 +68,15 @@ export default function HomePage() {
     fetchDashboardData();
   }, []);
 
+  // 1. Sync URL to selectedChat cleanly without firing events prematurely
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const roomIdParam = params.get('room');
 
-    if (roomIdParam) {
+    if (roomIdParam && rooms.length > 0) {
       const room = rooms.find(r => r.room_id === roomIdParam);
-      // 🛠️ FIXED: Changed (user as any)?.id to (user as any)?.user_id
-      const partnerId = room?.member_ids.find(id => id !== (user as any)?.user_id);
+      const myId = (user as any)?.user_id || (user as any)?.id;
+      const partnerId = room?.member_ids.find(id => id !== myId);
       const partner = partnerId ? usersMap[partnerId] : null;
       
       setSelectedChat({ 
@@ -84,26 +84,31 @@ export default function HomePage() {
         name: location.state?.friendName || partner?.name || 'Chat Room', 
         username: location.state?.friendUsername || partner?.username || '',
         avatar: location.state?.friendAvatar || partner?.avatar_url,
-        isOnline: location.state?.isOnline ?? partner?.is_online // 🛠️ 2. Pass it to state
+        isOnline: location.state?.isOnline ?? partner?.is_online 
       });
-
-      setRooms(prevRooms => {
-        const roomIndex = prevRooms.findIndex(r => r.room_id === roomIdParam);
-        if (roomIndex >= 0 && prevRooms[roomIndex].unread_count > 0) {
-          if (isConnected) {
-            sendMessage('read', {}, roomIdParam);
-          }
-          const updatedRooms = [...prevRooms];
-          updatedRooms[roomIndex] = { ...updatedRooms[roomIndex], unread_count: 0 };
-          return updatedRooms;
-        }
-        return prevRooms;
-      });
-
-    } else {
+    } else if (!roomIdParam) {
       setSelectedChat(null);
     }
-  }, [location.search, location.state, user, usersMap, isConnected, sendMessage, rooms]);
+  }, [location.search, location.state, rooms.length, user, usersMap]); 
+
+  // 🛠️ BUG 2 FIX (Part B): Dedicated Read Event Emitter that safely WAITS for the WebSocket to connect
+  useEffect(() => {
+    if (!selectedChat?.roomId || !isConnected || rooms.length === 0) return;
+
+    const roomIndex = rooms.findIndex(r => r.room_id === selectedChat.roomId);
+    if (roomIndex >= 0 && rooms[roomIndex].unread_count > 0) {
+      
+      // Tell backend to definitively mark it read
+      sendMessage('read', {}, selectedChat.roomId);
+      
+      // Clear local UI instantly so we don't spam the socket
+      setRooms(prevRooms => {
+        const updated = [...prevRooms];
+        updated[roomIndex] = { ...updated[roomIndex], unread_count: 0 };
+        return updated;
+      });
+    }
+  }, [selectedChat?.roomId, isConnected, rooms, sendMessage]); 
 
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 
@@ -152,10 +157,8 @@ export default function HomePage() {
   }
 
   return (
-    // 🛠️ FIXED LAYOUT: Replaced absolute inset-0 with dynamic viewport height to snap flush under the navbar
     <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] bg-[var(--background)] overflow-hidden relative">
       
-      {/* 📱 / 💻 LEFT SIDEBAR (Inbox / Requests) */}
       <div className={`flex-col h-full bg-[var(--background)] border-r border-[var(--border-color)] transition-all duration-300 ${
         selectedChat ? 'hidden md:flex w-80 lg:w-96 flex-shrink-0' : 'flex w-full md:w-80 lg:w-96 flex-shrink-0'
       }`}>
@@ -201,7 +204,6 @@ export default function HomePage() {
         <main className="flex-1 overflow-y-auto overscroll-contain custom-scrollbar relative">
           <AnimatePresence mode="wait">
             
-            {/* 💬 CHATS TAB */}
             {activeTab === 'chats' && (
               <motion.div key="chats" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pb-24 md:pb-4">
                 {rooms.length === 0 ? (
@@ -217,8 +219,8 @@ export default function HomePage() {
                 ) : (
                   <div className="divide-y divide-[var(--border-color)]">
                     {rooms.map((room) => {
-                      // 🛠️ FIXED: Changed (user as any)?.id to (user as any)?.user_id here too!
-                      const partnerId = room.member_ids.find(id => id !== (user as any)?.user_id);
+                      const myId = (user as any)?.user_id || (user as any)?.id;
+                      const partnerId = room.member_ids.find(id => id !== myId);
                       const partner = partnerId ? usersMap[partnerId] : null;
                       const partnerName = partner?.name || 'Unknown User';
                       const partnerUsername = partner?.username || '';
@@ -275,7 +277,6 @@ export default function HomePage() {
               </motion.div>
             )}
 
-            {/* 🔔 FRIEND REQUESTS TAB */}
             {activeTab === 'requests' && (
               <motion.div key="requests" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pb-24 md:pb-4">
                 {requests.length === 0 ? (
@@ -333,7 +334,6 @@ export default function HomePage() {
         </main>
       </div>
 
-      {/* 💻 RIGHT SIDEBAR (Active Chat View) */}
       <div className={`flex-1 h-full bg-[var(--card)] ${selectedChat ? 'flex' : 'hidden md:flex'} flex-col relative`}>
         {selectedChat ? (
           <ChatRoom 

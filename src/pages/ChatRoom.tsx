@@ -14,13 +14,13 @@ export default function ChatRoom({
   inlineRoomId, 
   inlineFriendName, 
   inlineFriendAvatar,
-  inlineFriendUsername, 
+  inlineFriendUsername,
   inlineIsOnline
 }: { 
   inlineRoomId?: string, 
   inlineFriendName?: string, 
   inlineFriendAvatar?: string,
-  inlineFriendUsername?: string
+  inlineFriendUsername?: string,
   inlineIsOnline?: boolean
 } = {}) {
   const navigate = useNavigate();
@@ -59,6 +59,7 @@ export default function ChatRoom({
 
   const sentMessageIdsRef = useRef<Set<string>>(new Set());
 
+  // 🛠️ BUG 1 FIX: Properly map backend history data to the UI format so isOwn is calculated
   useEffect(() => {
     if (isDevMode) {
       setMessages([
@@ -78,7 +79,20 @@ export default function ChatRoom({
     const fetchHistory = async () => {
       try {
         const history = await roomsApi.getMessages(roomId);
-        setMessages(history.reverse());
+        
+        // Ensure we check both user_id and id just in case of context variations
+        const myId = (user as any)?.user_id || (user as any)?.id;
+
+        const formattedHistory = history.map((msg: any) => ({
+          id: msg.id,
+          content: msg.content || msg.text || '',
+          created_at: msg.created_at || msg.ts || new Date().toISOString(),
+          isOwn: Boolean(msg.from && myId && msg.from === myId), // 🛠️ Explicitly mapping the side!
+          status: 'delivered',
+          imageUrl: msg.image_url || msg.imageUrl
+        }));
+
+        setMessages(formattedHistory.reverse());
         if (history.length < 50) setHasMore(false);
         
         setTimeout(() => {
@@ -114,7 +128,9 @@ export default function ChatRoom({
 
         const parsedTs = Number(lastMessage.ts);
         const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
-        const isOwn = Boolean(lastMessage.from && user?.user_id && lastMessage.from === user.user_id);
+        const myId = (user as any)?.user_id || (user as any)?.id;
+        const isOwn = Boolean(lastMessage.from && myId && lastMessage.from === myId);
+        
         const newMsg = {
           id: lastMessage.id,
           content: lastMessage.payload?.text || '', 
@@ -126,6 +142,11 @@ export default function ChatRoom({
         setMessages(prev => [...prev, newMsg]);
         setIsPartnerTyping(false);
         
+        // 🛠️ BUG 2 FIX (Part A): If we are currently looking at the chat and receive a live message, tell the server we read it immediately!
+        if (!isOwn && isConnected) {
+          sendMessage('read', {}, roomId);
+        }
+
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 100);
@@ -144,7 +165,7 @@ export default function ChatRoom({
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
       }
     }
-  }, [lastMessage, roomId, isDevMode]);
+  }, [lastMessage, roomId, isDevMode, isConnected, sendMessage, user]);
 
   useEffect(() => {
     if (isDevMode) return;
@@ -157,7 +178,18 @@ export default function ChatRoom({
             const oldestId = messages[0].id;
             const olderMessages = await roomsApi.getMessages(roomId!, oldestId);
             if (olderMessages.length < 50) setHasMore(false);
-            setMessages(prev => [...olderMessages.reverse(), ...prev]);
+            
+            const myId = (user as any)?.user_id || (user as any)?.id;
+            const formattedOlder = olderMessages.map((msg: any) => ({
+              id: msg.id,
+              content: msg.content || msg.text || '',
+              created_at: msg.created_at || msg.ts || new Date().toISOString(),
+              isOwn: Boolean(msg.from && myId && msg.from === myId),
+              status: 'delivered',
+              imageUrl: msg.image_url || msg.imageUrl
+            }));
+
+            setMessages(prev => [...formattedOlder.reverse(), ...prev]);
           } catch (err) {
             console.error('Failed to load older messages');
           } finally {
@@ -334,7 +366,6 @@ export default function ChatRoom({
               <h2 className="font-bold text-[var(--text-main)] leading-tight text-sm sm:text-lg truncate">
                 {isDevMode ? 'UI Testing Room' : friendName}
               </h2>
-              
               {isOnline ? (
                 <p className="text-xs text-green-500 font-medium">Online</p>
               ) : (
@@ -365,7 +396,6 @@ export default function ChatRoom({
             No messages yet. Say hello!
           </div>
         ) : (
-          
           <div className="space-y-2 sm:space-y-3 min-w-0 w-full flex flex-col">
             {messages.map((msg, index) => (
               <MessageBubble 
