@@ -257,27 +257,27 @@ export default function ChatRoom({
   return (
   <div className="flex-1 flex flex-col bg-[var(--background)] w-full h-full overflow-hidden relative">
       
-      <div className="flex-shrink-0 flex items-center justify-between p-3 sm:p-4 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe">
-        <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <button 
             onClick={() => navigate(-1)} 
-            className="p-2 -ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors"
+            className="p-2 -ml-1 sm:-ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* 🛠️ Friend Avatar Display */}
-            <div className="w-10 h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0 flex items-center justify-center">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0 flex items-center justify-center">
               {friendAvatar ? (
                 <img src={friendAvatar} alt={friendName} className="w-full h-full object-cover" />
               ) : (
-                <User className="w-5 h-5 text-[var(--text-muted)]" />
+                <User className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--text-muted)]" />
               )}
             </div>
-            <div className="flex flex-col justify-center">
-              {/* 🛠️ Dynamic Friend Name */}
-              <h2 className="font-bold text-[var(--text-main)] leading-tight text-base sm:text-lg">
+            <div className="flex flex-col justify-center min-w-0">
+              {/* 🛠️ Dynamic Friend Name - Truncated on mobile */}
+              <h2 className="font-bold text-[var(--text-main)] leading-tight text-sm sm:text-lg truncate">
                 {isDevMode ? 'UI Testing Room' : friendName}
               </h2>
               <p className="text-xs text-green-500 font-medium">Online</p>
@@ -285,25 +285,25 @@ export default function ChatRoom({
           </div>
         </div>
         
-        <button className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors">
+        <button className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0">
           <MoreVertical className="w-5 h-5" />
         </button>
       </div>
 
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain p-4 pb-2 custom-scrollbar bg-[var(--background)]"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)]"
       >
         <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2">
           {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
         </div>
         
         {messages.length === 0 && !isPartnerTyping ? (
-          <div className="text-center text-[var(--text-muted)] font-medium mt-10 bg-[var(--card)] border border-[var(--border-color)] p-4 rounded-xl mx-auto max-w-xs">
+          <div className="text-center text-[var(--text-muted)] font-medium mt-8 sm:mt-10 bg-[var(--card)] border border-[var(--border-color)] p-3 sm:p-4 rounded-xl mx-auto max-w-xs text-sm sm:text-base">
             No messages yet. Say hello!
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {messages.map((msg, index) => (
               <MessageBubble 
                 key={msg.id || index}
