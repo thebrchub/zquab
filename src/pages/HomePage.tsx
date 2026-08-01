@@ -3,12 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
 import { useWebSocket } from '../context/WebSocketContext';
-import { Loader2, MessageSquare, Bell, UserPlus, Check, X, MessageCircle } from 'lucide-react';
+import { Loader2, MessageSquare, Bell, Search, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import ChatRoom from './ChatRoom'; 
 
-// 🛠️ Added username to the interface so we can pass it to ChatRoom for the unfriend sidebar
 interface User {
   name: string;
   username: string; 
@@ -46,7 +45,6 @@ export default function HomePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   
-  // 🛠️ Added username to the selectedChat state
   const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string } | null>(null);
 
   useEffect(() => {
@@ -76,7 +74,8 @@ export default function HomePage() {
 
     if (roomIdParam) {
       const room = rooms.find(r => r.room_id === roomIdParam);
-      const partnerId = room?.member_ids.find(id => id !== (user as any)?.id);
+      // 🛠️ FIXED: Changed (user as any)?.id to (user as any)?.user_id
+      const partnerId = room?.member_ids.find(id => id !== (user as any)?.user_id);
       const partner = partnerId ? usersMap[partnerId] : null;
       
       setSelectedChat({ 
@@ -102,9 +101,8 @@ export default function HomePage() {
     } else {
       setSelectedChat(null);
     }
-  }, [location.search, location.state, user, usersMap, isConnected, sendMessage]);
+  }, [location.search, location.state, user, usersMap, isConnected, sendMessage, rooms]);
 
-  // 🛠️ Ensure handleRoomClick accepts and routes the username
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string) => {
     navigate(`/home?room=${room.room_id}`, { 
       state: { friendName: partnerName, friendUsername: partnerUsername, friendAvatar: partnerAvatar } 
@@ -152,8 +150,8 @@ export default function HomePage() {
   }
 
   return (
-    // 🛠️ REPLACED absolute inset-0 with strict viewport height limits to snap to the navbar perfectly
-    <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] bg-[var(--background)] overflow-hidden">
+    // 🛠️ FIXED LAYOUT: Replaced absolute inset-0 with dynamic viewport height to snap flush under the navbar
+    <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] bg-[var(--background)] overflow-hidden relative">
       
       {/* 📱 / 💻 LEFT SIDEBAR (Inbox / Requests) */}
       <div className={`flex-col h-full bg-[var(--background)] border-r border-[var(--border-color)] transition-all duration-300 ${
@@ -162,6 +160,9 @@ export default function HomePage() {
         <header className="pt-safe pb-4 px-4 bg-[var(--card)] border-b border-[var(--border-color)] flex-shrink-0 z-20">
           <div className="flex items-center justify-between mt-4 mb-6">
             <h1 className="text-2xl font-black text-[var(--text-main)] tracking-tight">Messages</h1>
+            <button className="w-10 h-10 rounded-full bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-main)] active:scale-95 transition-transform">
+              <Search className="w-5 h-5" />
+            </button>
           </div>
 
           <div className="flex p-1 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
@@ -214,7 +215,8 @@ export default function HomePage() {
                 ) : (
                   <div className="divide-y divide-[var(--border-color)]">
                     {rooms.map((room) => {
-                      const partnerId = room.member_ids.find(id => id !== (user as any)?.id);
+                      // 🛠️ FIXED: Changed (user as any)?.id to (user as any)?.user_id here too!
+                      const partnerId = room.member_ids.find(id => id !== (user as any)?.user_id);
                       const partner = partnerId ? usersMap[partnerId] : null;
                       const partnerName = partner?.name || 'Unknown User';
                       const partnerUsername = partner?.username || '';
@@ -336,7 +338,7 @@ export default function HomePage() {
             inlineRoomId={selectedChat.roomId} 
             inlineFriendName={selectedChat.name}
             inlineFriendAvatar={selectedChat.avatar}
-            inlineFriendUsername={selectedChat.username} // 🛠️ Passed the username down securely!
+            inlineFriendUsername={selectedChat.username}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-[var(--background)]">
