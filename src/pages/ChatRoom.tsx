@@ -263,8 +263,7 @@ export default function ChatRoom({
   }
 
   return (
-    
-    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] md:h-full overflow-hidden relative min-h-0 min-w-0">
+    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] md:h-full overflow-hidden relative min-h-0 min-w-0">
       
       <ChatDetailsSidebar 
         isOpen={showSidebar}
@@ -345,12 +344,11 @@ export default function ChatRoom({
         </button>
       </div>
 
-      {/* 🛠️ ADDED min-w-0 and w-full HERE to keep the scroll area strictly contained */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0 min-w-0 w-full"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0 min-w-0 w-full flex flex-col"
       >
-        <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2">
+        <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2 flex-shrink-0">
           {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
         </div>
         
@@ -359,7 +357,8 @@ export default function ChatRoom({
             No messages yet. Say hello!
           </div>
         ) : (
-          <div className="space-y-2 sm:space-y-3">
+          
+          <div className="space-y-2 sm:space-y-3 min-w-0 w-full flex flex-col">
             {messages.map((msg, index) => (
               <MessageBubble 
                 key={msg.id || index}
