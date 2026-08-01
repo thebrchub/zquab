@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { roomsApi } from '../api/rooms';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn } from 'lucide-react';
+import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn, Users, MapPin, Calendar } from 'lucide-react';
 
 export default function UserProfile() {
   const { username } = useParams<{ username: string }>();
@@ -12,25 +12,35 @@ export default function UserProfile() {
   const { user } = useAuth();
   
   const [profile, setProfile] = useState<any>(null);
+  const [friendsList, setFriendsList] = useState<any[]>([]); // 🛠️ NEW: State for public friends list
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchProfileData = async () => {
       if (!username) return;
       try {
         setLoading(true);
-        const data = await usersApi.getUserProfile(username);
-        setProfile(data);
+        setError(null);
+        
+        // 🛠️ Fetch profile and friends concurrently. 
+        // Using a catch on getUserFriends so the page still loads if the backend endpoint isn't ready yet.
+        const [profileData, friendsData] = await Promise.all([
+          usersApi.getUserProfile(username),
+          usersApi.getUserFriends(username).catch(() => []) 
+        ]);
+        
+        setProfile(profileData);
+        setFriendsList(friendsData);
       } catch (err: any) {
-        // A 404 here intentionally means "doesn't exist OR blocked you"
         setError(err.message || 'User not found');
       } finally {
         setLoading(false);
       }
     };
-    fetchProfile();
+    
+    fetchProfileData();
   }, [username]);
 
   const handleFriendAction = async () => {
@@ -61,11 +71,7 @@ export default function UserProfile() {
     setActionLoading(true);
     try {
       const room = await roomsApi.createRoom(username);
-      
-      // 🛠️ CHANGED: Navigate to the integrated HomePage instead of the standalone ChatRoom.
-      // Passes the room ID via both query parameter and state so the desktop split-view can open it instantly.
       navigate(`/home?room=${room.room_id}`, { state: { activeRoomId: room.room_id } });
-      
     } catch (err: any) {
       alert(err.message || 'Failed to start conversation');
       setActionLoading(false);
@@ -86,21 +92,17 @@ export default function UserProfile() {
         <UserX className="w-16 h-16 opacity-20" />
         <h2 className="text-xl font-bold">User Not Found</h2>
         <p className="text-sm">This account doesn't exist or is unavailable.</p>
-        <button onClick={() => navigate(-1)} className="text-[#3B82F6] hover:underline mt-2">Go Back</button>
+        <button onClick={() => navigate(-1)} className="text-[#3B82F6] hover:underline mt-2 font-bold">Go Back</button>
       </div>
     );
   }
 
-  // Dynamic button rendering based on exact API statuses
   const renderActionButton = () => {
-    // Anonymous/guest viewer — backend omits friend_request_status entirely
-    // for these callers, so there's no relationship to act on. Showing
-    // Add Friend/Message here would just 401 on click.
     if (!user || user.is_guest || profile.friend_request_status === undefined) {
       return (
         <button
           onClick={() => navigate('/auth')}
-          className="w-full py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold hover:bg-[var(--border-color)] transition-colors flex items-center justify-center gap-2"
+          className="w-full sm:w-auto px-8 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold hover:border-[#3B82F6] hover:text-[#3B82F6] transition-colors flex items-center justify-center gap-2"
         >
           <LogIn className="w-5 h-5" /> Log in to connect
         </button>
@@ -112,7 +114,7 @@ export default function UserProfile() {
         <button 
           onClick={handleMessage}
           disabled={actionLoading}
-          className="w-full py-3 bg-[#3B82F6] text-white rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          className="w-full sm:w-auto px-8 py-3 bg-[#3B82F6] text-white rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/20"
         >
           {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
           Message
@@ -122,11 +124,11 @@ export default function UserProfile() {
     
     if (profile.friend_request_status === 'pending_received') {
       return (
-        <div className="grid grid-cols-2 gap-3 w-full">
+        <div className="flex gap-3 w-full sm:w-auto">
           <button 
             onClick={handleFriendAction}
             disabled={actionLoading}
-            className="py-3 bg-[#3B82F6] text-white rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            className="flex-1 sm:flex-none px-8 py-3 bg-[#3B82F6] text-white rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/20"
           >
             {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Accept Request'}
           </button>
@@ -138,7 +140,7 @@ export default function UserProfile() {
               setActionLoading(false);
             }}
             disabled={actionLoading}
-            className="py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors disabled:opacity-50"
+            className="flex-1 sm:flex-none px-8 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors disabled:opacity-50"
           >
             Reject
           </button>
@@ -152,10 +154,10 @@ export default function UserProfile() {
       <button 
         onClick={handleFriendAction}
         disabled={actionLoading}
-        className={`w-full py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50
+        className={`w-full sm:w-auto px-8 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50
           ${isPendingSent 
-            ? 'bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10' 
-            : 'bg-[#3B82F6] text-white hover:bg-blue-600'
+            ? 'bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/30' 
+            : 'bg-[#3B82F6] text-white hover:bg-blue-600 shadow-lg shadow-blue-500/20'
           }`}
       >
         {actionLoading ? (
@@ -174,49 +176,110 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="max-w-xl mx-auto w-full p-4 md:p-6 pb-20">
-      <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-3xl overflow-hidden shadow-sm">
+    // 🛠️ Expanded container width for a proper social media feel
+    <div className="max-w-4xl mx-auto w-full p-4 md:p-6 lg:p-8 pb-24">
+      
+      {/* --- PROFILE HEADER CARD --- */}
+      <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] overflow-hidden shadow-sm mb-8">
         
-        <div className="h-32 bg-gradient-to-r from-blue-500/20 to-purple-500/20 w-full relative">
-        </div>
+        {/* Cover Photo Area */}
+        <div className="h-32 sm:h-48 bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-purple-500/20 w-full relative"></div>
         
-        <div className="px-6 pb-6 relative">
-          <div className="w-24 h-24 rounded-full border-4 border-[var(--card)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center absolute -top-12 shadow-lg">
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-3xl font-bold text-[var(--text-muted)]">{profile.name?.charAt(0)?.toUpperCase()}</span>
-            )}
+        <div className="px-6 sm:px-10 pb-8 relative">
+          {/* Avatar Header Layout */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-16 sm:-mt-20 mb-6 relative z-10">
+            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[var(--card)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-xl">
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-5xl font-black text-[var(--text-muted)]">{profile.name?.charAt(0)?.toUpperCase()}</span>
+              )}
+            </div>
+            
+            <div className="flex-shrink-0 w-full sm:w-auto">
+              {renderActionButton()}
+            </div>
           </div>
           
-          <div className="pt-16 pb-6 text-center">
-            <h1 className="text-2xl font-bold text-[var(--text-main)] leading-tight">{profile.name}</h1>
-            <p className="text-sm text-[var(--text-muted)] font-medium">@{profile.username}</p>
+          {/* User Info */}
+          <div>
+            <h1 className="text-3xl font-black text-[var(--text-main)] leading-tight tracking-tight">{profile.name}</h1>
+            <p className="text-base text-[var(--text-muted)] font-medium mb-4">@{profile.username}</p>
             
-            <div className="flex items-center justify-center gap-4 mt-4 text-sm">
-              <div className="text-[var(--text-muted)]">
-                <strong className="text-[var(--text-main)] mr-1">{profile.friend_count || 0}</strong> 
-                Friends
+            {/* Badges */}
+            <div className="flex flex-wrap items-center gap-3 text-sm font-medium mb-6">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
+                <Users className="w-4 h-4 text-[#3B82F6]" />
+                <strong>{profile.friend_count || 0}</strong> <span className="text-[var(--text-muted)]">Friends</span>
               </div>
-              <div className="w-1 h-1 rounded-full bg-[var(--border-color)]"></div>
-              <div className="text-[var(--text-muted)]">
-                Joined {new Date(profile.doj).getFullYear()}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
+                <Calendar className="w-4 h-4 text-[#3B82F6]" />
+                <span className="text-[var(--text-muted)]">Joined {new Date(profile.doj).getFullYear()}</span>
               </div>
+              {profile.country && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
+                  <MapPin className="w-4 h-4 text-[#3B82F6]" />
+                  <span className="text-[var(--text-muted)]">{profile.country}</span>
+                </div>
+              )}
             </div>
 
             {profile.bio && (
-              <p className="mt-6 text-[var(--text-main)] text-sm leading-relaxed max-w-sm mx-auto bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+              <p className="text-[var(--text-main)] text-base leading-relaxed bg-[var(--background)]/50 p-5 rounded-2xl border border-[var(--border-color)]">
                 {profile.bio}
               </p>
             )}
           </div>
-
-          <div className="pt-2 border-t border-[var(--border-color)] flex justify-center">
-            {renderActionButton()}
-          </div>
-          
         </div>
       </div>
+
+      {/* --- PUBLIC FRIENDS GRID --- */}
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex items-center gap-3 px-2">
+          <div className="p-2 bg-[#3B82F6]/10 text-[#3B82F6] rounded-xl">
+            <Users className="w-5 h-5" />
+          </div>
+          <h2 className="text-xl font-bold text-[var(--text-main)]">Friends</h2>
+          <span className="text-sm font-bold text-[var(--text-muted)] bg-[var(--card)] border border-[var(--border-color)] px-2 py-0.5 rounded-full">
+            {profile.friend_count || 0}
+          </span>
+        </div>
+
+        {friendsList.length === 0 ? (
+          <div className="text-center py-16 px-4 bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] border-dashed">
+            <div className="w-16 h-16 rounded-full bg-[var(--background)] mx-auto flex items-center justify-center mb-4">
+              <Users className="w-8 h-8 text-[var(--text-muted)] opacity-50" />
+            </div>
+            <h3 className="text-lg font-bold text-[var(--text-main)] mb-1">No friends to show</h3>
+            <p className="text-[var(--text-muted)] text-sm">
+              {profile.name} hasn't added any friends to their network yet.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {friendsList.map((friend) => (
+              <Link 
+                key={friend.username}
+                to={`/user/${friend.username}`}
+                className="bg-[var(--card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col items-center text-center hover:border-[#3B82F6] transition-all hover:shadow-md group"
+              >
+                <div className="w-16 h-16 rounded-full bg-[var(--background)] border border-[var(--border-color)] overflow-hidden mb-3 group-hover:scale-105 transition-transform">
+                  {friend.avatar_url ? (
+                    <img src={friend.avatar_url} alt={friend.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center font-bold text-xl text-[var(--text-muted)]">
+                      {friend.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <h3 className="font-bold text-[var(--text-main)] text-sm w-full truncate">{friend.name}</h3>
+                <p className="text-[11px] text-[var(--text-muted)] w-full truncate">@{friend.username}</p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

@@ -38,5 +38,11 @@ export const usersApi = {
     // The API guide specifies the param is 'query', not 'q'
     const response = await apiClient.get(`/users/search?query=${encodeURIComponent(query)}`);
     return response.data; 
+  },
+
+  // 🛠️ ADDED: Fetch public friends list for a specific user
+  getUserFriends: async (username: string) => {
+    const response = await apiClient.get(`/users/${encodeURIComponent(username)}/friends`);
+    return response.data;
   }
 };

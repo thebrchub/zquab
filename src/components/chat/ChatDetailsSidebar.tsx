@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, UserMinus, AlertTriangle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { friendsApi } from '../../api/friends'; // Ensure this path is correct
+import { friendsApi } from '../../api/friends'; 
+import { Link } from 'react-router-dom';
 
 interface Props {
   isOpen: boolean;
@@ -73,15 +74,22 @@ export default function ChatDetailsSidebar({ isOpen, onClose, friendName, friend
 
               {/* Profile Summary */}
               <div className="flex flex-col items-center p-6 border-b border-[var(--border-color)]">
-                <div className="w-24 h-24 rounded-full border-4 border-[var(--background)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-lg mb-4">
-                  {friendAvatar ? (
-                    <img src={friendAvatar} alt={friendName} className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-10 h-10 text-[var(--text-muted)]" />
-                  )}
-                </div>
-                <h2 className="text-xl font-bold text-[var(--text-main)] truncate w-full text-center">{friendName}</h2>
-                {friendUsername && <p className="text-sm text-[var(--text-muted)] mt-1">@{friendUsername}</p>}
+                {/* 🛠️ Wrapped in a Link to navigate to the User Profile */}
+                <Link 
+                  to={`/user/${friendUsername}`} 
+                  onClick={onClose} // Close the sidebar when navigating
+                  className="flex flex-col items-center group cursor-pointer w-full"
+                >
+                  <div className="w-24 h-24 rounded-full border-4 border-[var(--background)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-lg mb-4 group-hover:scale-105 group-hover:border-[#3B82F6] transition-all">
+                    {friendAvatar ? (
+                      <img src={friendAvatar} alt={friendName} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10 text-[var(--text-muted)]" />
+                    )}
+                  </div>
+                  <h2 className="text-xl font-bold text-[var(--text-main)] truncate w-full text-center group-hover:text-[#3B82F6] transition-colors">{friendName}</h2>
+                  {friendUsername && <p className="text-sm text-[var(--text-muted)] mt-1">@{friendUsername}</p>}
+                </Link>
               </div>
 
               {/* Actions Area */}
