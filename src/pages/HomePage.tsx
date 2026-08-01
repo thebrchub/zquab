@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
 import { useWebSocket } from '../context/WebSocketContext';
-import { Loader2, MessageSquare, Bell, Search, UserPlus, Check, X, MessageCircle } from 'lucide-react';
+import { Loader2, MessageSquare, Bell,  UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import ChatRoom from './ChatRoom'; 
@@ -156,9 +156,9 @@ export default function HomePage() {
         <header className="pt-safe pb-4 px-4 bg-[var(--card)] border-b border-[var(--border-color)] flex-shrink-0 z-20">
           <div className="flex items-center justify-between mt-4 mb-6">
             <h1 className="text-2xl font-black text-[var(--text-main)] tracking-tight">Messages</h1>
-            <button className="w-10 h-10 rounded-full bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-main)] active:scale-95 transition-transform">
+            {/* <button className="w-10 h-10 rounded-full bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-main)] active:scale-95 transition-transform">
               <Search className="w-5 h-5" />
-            </button>
+            </button> */}
           </div>
 
           <div className="flex p-1 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">

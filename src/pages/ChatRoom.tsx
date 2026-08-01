@@ -8,15 +8,18 @@ import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar'; // 🛠️ 1. Import Sidebar
 
 export default function ChatRoom({ 
   inlineRoomId, 
   inlineFriendName, 
-  inlineFriendAvatar 
+  inlineFriendAvatar,
+  inlineFriendUsername // 🛠️ 2. Added inlineFriendUsername prop
 }: { 
   inlineRoomId?: string, 
   inlineFriendName?: string, 
-  inlineFriendAvatar?: string 
+  inlineFriendAvatar?: string,
+  inlineFriendUsername?: string
 } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +29,7 @@ export default function ChatRoom({
   
   const friendName = inlineFriendName || location.state?.friendName || 'Chat Room';
   const friendAvatar = inlineFriendAvatar || location.state?.friendAvatar || null;
+  const friendUsername = inlineFriendUsername || location.state?.friendUsername || ''; // 🛠️ 3. Added friendUsername extraction
   
   const isDevMode = location.pathname === '/dev/chat';
   
@@ -42,6 +46,8 @@ export default function ChatRoom({
 
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showSidebar, setShowSidebar] = useState(false); // 🛠️ 4. Added Sidebar State
 
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const partnerTypingTimeoutRef = useRef<number | null>(null);
@@ -257,9 +263,17 @@ export default function ChatRoom({
   }
 
   return (
-    // 🛠️ FIXED: Added h-[calc(100dvh-64px)] on mobile to lock the screen size, and min-h-0
     <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] md:h-full overflow-hidden relative min-h-0">
       
+      {/* 🛠️ 5. Render ChatDetailsSidebar */}
+      <ChatDetailsSidebar 
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+        friendName={friendName}
+        friendAvatar={friendAvatar}
+        friendUsername={friendUsername}
+      />
+
       <AnimatePresence>
         {viewingImage && (
           <motion.div
@@ -300,8 +314,8 @@ export default function ChatRoom({
       <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2 z-10">
         <div className="flex items-center gap-2 min-w-0">
           <button 
-            onClick={() => navigate(-1)} 
-            className="p-2 -ml-1 sm:-ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0"
+            onClick={() => navigate('/home')} 
+            className="p-2 -ml-1 sm:-ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0 md:hidden"
           >
             <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
@@ -323,12 +337,15 @@ export default function ChatRoom({
           </div>
         </div>
         
-        <button className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0">
+        {/* 🛠️ 6. Open Sidebar on Click */}
+        <button 
+          onClick={() => setShowSidebar(true)} 
+          className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0"
+        >
           <MoreVertical className="w-5 h-5" />
         </button>
       </div>
 
-      {/* 🛠️ FIXED: Added min-h-0 to the scroll container to ensure flexbox constraints */}
       <div 
         ref={scrollRef}
         className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0"
@@ -367,7 +384,7 @@ export default function ChatRoom({
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
           onTyping={handleTyping}
-          onDirectImageClick={handleRequestAttachment} // 🛠️ FIXED: Bypass the Stranger drawer for direct file picks
+          onDirectImageClick={handleRequestAttachment}
         />
       </div>
       
