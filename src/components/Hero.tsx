@@ -8,19 +8,16 @@ import { useAuth } from '../context/AuthContext';
 export default function Hero() {
   const { theme } = useTheme(); 
   
-  // 🛠️ Extracted `user` to check current auth state
   const { user, loginAsGuest } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
   const handleStartChatting = async () => {
-    // 🛠️ 1. If they are already a guest or full user, skip login and jump to chat!
     if (user) {
       navigate('/chat');
       return;
     }
 
-    // 🛠️ 2. If they have no session, mint a guest token silently
     setLoading(true);
     try {
       await loginAsGuest();
@@ -36,10 +33,8 @@ export default function Hero() {
   return (
     <section className="relative pt-8 pb-16 w-full">
       
-      {/* WIDE, CLEAN CONTAINER */}
       <div className="relative mx-4 md:mx-8 lg:mx-12 rounded-[2rem] overflow-hidden border border-[var(--border-color)] shadow-xl shadow-black/5 dark:shadow-black/40 bg-[var(--background)]">
         
-        {/* Foolproof React Conditional Rendering */}
         {theme === 'light' ? (
           <img 
             src="/hero-w.webp" 
@@ -69,7 +64,8 @@ export default function Hero() {
                 zQuab v1.0 is live
               </div>
               
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6 text-[var(--text-main)]">
+              {/* 🛠️ ADDED: text-center md:text-left */}
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6 text-[var(--text-main)] text-center md:text-left">
                 Meet someone <br />
                 <span className="text-[#3B82F6]">new in seconds.</span>
               </h1>
@@ -113,49 +109,67 @@ export default function Hero() {
                     <div className="w-3 h-3 rounded-full bg-[var(--border-color)]"></div>
                   </div>
                   <div className="mx-auto flex items-center gap-2 text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest">
-                    <MessageSquare className="w-3.5 h-3.5" /> zQuab Preview
+                    zQuab Preview
                   </div>
                 </div>
                 
                 {/* Mock Body */}
-                <div className="p-5 space-y-5 h-[340px] bg-[var(--card)] relative">
+                <div className="p-5 space-y-6 h-[340px] bg-[var(--card)] relative flex flex-col">
                   <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5 }}
-                    className="text-center text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mt-2 mb-6"
+                    className="text-center text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mt-2 mb-2"
                   >
                     Stranger Connected
                   </motion.div>
 
+                  {/* Left Message */}
                   <motion.div 
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: 1 }}
-                    className="flex justify-start"
+                    className="flex justify-start gap-3 w-full"
                   >
-                    <div className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-4 py-3 rounded-2xl rounded-tl-sm text-sm font-medium max-w-[85%]">
-                      Hey! The UI on this site is incredibly clean. Who built this?
+                    <img 
+                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80" 
+                      alt="Stranger Avatar" 
+                      className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[var(--border-color)]"
+                    />
+                    <div className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-4 py-3 rounded-2xl rounded-tl-sm text-sm font-medium max-w-[75%]">
+                      Hey! How's your day going?
                     </div>
                   </motion.div>
 
+                  {/* Right Message */}
                   <motion.div 
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ delay: 2.5 }}
-                    className="flex justify-end"
+                    className="flex justify-end gap-3 w-full"
                   >
-                    <div className="bg-[#3B82F6] text-white px-4 py-3 rounded-2xl rounded-tr-sm text-sm font-medium max-w-[85%]">
-                      Just the team at Blazing Render Creation Studios pushing some boundaries. 🚀
-                    </div>h
+                    <div className="bg-[#3B82F6] text-white px-4 py-3 rounded-2xl rounded-tr-sm text-sm font-medium max-w-[75%]">
+                      Pretty great! Just listening to some music 🎧
+                    </div>
+                    <img 
+                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80" 
+                      alt="Your Avatar" 
+                      className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#3B82F6]"
+                    />
                   </motion.div>
                   
+                  {/* Typing Indicator */}
                   <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 4 }}
-                    className="flex justify-start absolute bottom-5"
+                    className="flex justify-start gap-3 absolute bottom-6 left-0 w-full px-5"
                   >
+                    <img 
+                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80" 
+                      alt="Stranger Avatar" 
+                      className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[var(--border-color)]"
+                    />
                     <div className="bg-[var(--background)] border border-[var(--border-color)] px-4 py-3.5 rounded-2xl rounded-tl-sm flex gap-1.5 items-center">
                       <motion.div animate={{ y: [0, -3, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]"></motion.div>
                       <motion.div animate={{ y: [0, -3, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]"></motion.div>

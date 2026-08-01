@@ -72,10 +72,10 @@ export default function FeaturesGrid() {
     <section className="py-24 relative w-full bg-[var(--background)] z-20 -mb-[2px] border-none">
       <div className="mx-4 md:mx-8 lg:mx-12">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-[var(--text-main)]">
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-[var(--text-main)]">
             Everything you need. <span className="text-[#3B82F6]">Nothing you don't.</span>
           </h2>
-          <p className="text-lg text-[var(--text-muted)] max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl  text-[var(--text-muted)] max-w-2xl mx-auto">
             We stripped away the noise so you can focus on what actually matters: meeting someone new.
           </p>
         </div>
