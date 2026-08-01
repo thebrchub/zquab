@@ -148,7 +148,6 @@ export default function ChatRoom({
     // it must be handled before the room-id match check below, and its real
     // wire type is 'send_confirm' — not the old 'message_sent_confirm' name.
     if (lastMessage.type === 'send_confirm') {
-      if (lastMessage.id) sentMessageIdsRef.current.delete(lastMessage.id);
       return;
     }
 

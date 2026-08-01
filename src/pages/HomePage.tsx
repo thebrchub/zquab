@@ -115,6 +115,25 @@ export default function HomePage() {
     });
   }, [lastMessage, user, selectedChat?.roomId]);
 
+  // Presence is otherwise a one-time snapshot from the last /rooms fetch —
+  // patch usersMap live from the same WS events the backend already
+  // broadcasts, instead of leaving "online"/"offline" frozen at fetch time.
+  useEffect(() => {
+    if (!lastMessage) return;
+    if (lastMessage.type !== 'presence_online' && lastMessage.type !== 'presence_offline') return;
+
+    const presenceUserId = lastMessage.from || lastMessage.sender_id;
+    if (!presenceUserId) return;
+
+    setUsersMap(prev => {
+      if (!prev[presenceUserId]) return prev;
+      return {
+        ...prev,
+        [presenceUserId]: { ...prev[presenceUserId], is_online: lastMessage.type === 'presence_online' },
+      };
+    });
+  }, [lastMessage]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const roomIdParam = params.get('room');
@@ -130,7 +149,9 @@ export default function HomePage() {
         name: location.state?.friendName || partner?.name || 'Chat Room', 
         username: location.state?.friendUsername || partner?.username || '',
         avatar: location.state?.friendAvatar || partner?.avatar_url,
-        isOnline: location.state?.isOnline ?? partner?.is_online 
+        // Prefer the live usersMap value (kept fresh by the presence effect
+        // above) over location.state's one-time snapshot from click-time.
+        isOnline: partner?.is_online ?? location.state?.isOnline
       });
 
     } else if (!roomIdParam) {
