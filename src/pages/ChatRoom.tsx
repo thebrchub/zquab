@@ -201,6 +201,19 @@ export default function ChatRoom({
         setIsPartnerTyping(false);
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
       }
+      else if (lastMessage.type === 'read') {
+        // Broadcast to the whole room (including the reader themselves) —
+        // only upgrade statuses when the read came from the OTHER person,
+        // otherwise this is just an echo of our own read receipt.
+        const myId = (user as any)?.user_id || (user as any)?.id;
+        const readerId = lastMessage.sender_id || lastMessage.from;
+        if (readerId && myId && readerId !== myId) {
+          // No specific message_id is sent — 'read' is a watermark, so mark
+          // every one of our own messages read. This is the only place any
+          // message's status ever advances past its initial 'sent'/'delivered'.
+          setMessages(prev => prev.map(m => (m.isOwn && m.status !== 'read') ? { ...m, status: 'read' } : m));
+        }
+      }
     }
   }, [lastMessage, roomId, isDevMode, user, isConnected, sendMessage]);
 
