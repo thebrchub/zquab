@@ -8,7 +8,7 @@ interface Props {
   disabled: boolean;
   onRequestPhoto?: () => void;
   photoRequestDisabled?: boolean;
-  onTyping?: () => void; // 🛠️ Defined in props
+  onTyping?: () => void;
 }
 
 export default function ChatInput({ 
@@ -16,13 +16,12 @@ export default function ChatInput({
   disabled, 
   onRequestPhoto, 
   photoRequestDisabled,
-  onTyping // 🛠️ 1. Destructured here
+  onTyping
 }: Props) {
   const [text, setText] = useState('');
   const [showDrawer, setShowDrawer] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
 
-  // 🛠️ 2. Added this handler to fire onTyping on every keystroke
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setText(e.target.value);
     if (onTyping) onTyping();
@@ -47,13 +46,13 @@ export default function ChatInput({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-[calc(100%+8px)] left-2 sm:left-14 z-50 shadow-2xl rounded-2xl overflow-hidden border border-[var(--border-color)]"
+            className="absolute bottom-[calc(100%+8px)] left-2 sm:left-14 z-50 shadow-2xl rounded-2xl overflow-hidden border border-[var(--border-color)] max-w-[90vw]"
           >
             <EmojiPicker 
               theme={Theme.DARK} 
               onEmojiClick={(emojiData) => {
                 setText((prev) => prev + emojiData.emoji);
-                if (onTyping) onTyping(); // Trigger typing even when adding an emoji
+                if (onTyping) onTyping(); 
               }}
               searchDisabled={false}
               skinTonesDisabled
@@ -106,10 +105,10 @@ export default function ChatInput({
         )}
       </AnimatePresence>
 
-      {/* Main Input Bar */}
-      <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 w-full max-w-5xl mx-auto pb-safe pr-14 sm:pr-4">
+      {/* 🛠️ Main Input Bar (Fixed Mobile Padding & Margins) */}
+      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 w-full max-w-5xl mx-auto pb-safe">
         
-        {/* Attachment Toggle (Extreme Left) */}
+        {/* Attachment Toggle */}
         {onRequestPhoto && (
           <button
             onClick={() => {
@@ -117,7 +116,7 @@ export default function ChatInput({
               setShowEmoji(false); 
             }}
             disabled={disabled}
-            className={`p-2.5 rounded-full transition-colors flex-shrink-0 ${
+            className={`p-2 sm:p-2.5 rounded-full transition-colors flex-shrink-0 ${
               showDrawer 
                 ? 'bg-[#3B82F6] text-white' 
                 : 'text-[var(--text-muted)] hover:text-[#3B82F6] hover:bg-[var(--background)]'
@@ -128,7 +127,7 @@ export default function ChatInput({
         )}
 
         {/* Input Wrapper */}
-        <div className="flex-1 flex items-center gap-2 bg-[var(--background)] border border-[var(--border-color)] focus-within:border-[#3B82F6] focus-within:ring-1 focus-within:ring-[#3B82F6] rounded-full px-2 py-1 transition-all">
+        <div className="flex-1 flex items-center gap-1 sm:gap-2 bg-[var(--background)] border border-[var(--border-color)] focus-within:border-[#3B82F6] focus-within:ring-1 focus-within:ring-[#3B82F6] rounded-full px-1.5 sm:px-2 py-1 transition-all">
           
           {/* Emoji Toggle */}
           <button 
@@ -141,17 +140,17 @@ export default function ChatInput({
               showEmoji ? 'text-[#3B82F6] bg-[var(--card)]' : 'text-[var(--text-muted)] hover:text-[#3B82F6]'
             }`}
           >
-            <Smile className="w-6 h-6" />
+            <Smile className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           
           <input
             type="text"
             value={text}
-            onChange={handleChange} // 🛠️ 3. Updated to use the new handler
+            onChange={handleChange}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             disabled={disabled}
-            placeholder={disabled ? "Waiting..." : "Type a message..."}
-            className="flex-1 min-w-0 bg-transparent outline-none py-2 pr-2 text-[var(--text-main)] placeholder:text-[var(--text-muted)] disabled:opacity-50 text-base"
+            placeholder={disabled ? "Waiting..." : "Message..."}
+            className="flex-1 min-w-0 bg-transparent outline-none py-1.5 sm:py-2 pr-2 text-[var(--text-main)] placeholder:text-[var(--text-muted)] disabled:opacity-50 text-sm sm:text-base"
           />
         </div>
         
@@ -159,9 +158,9 @@ export default function ChatInput({
         <button
           onClick={handleSend}
           disabled={!text.trim() || disabled}
-          className="flex-shrink-0 p-3 bg-[#3B82F6] text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-[#3B82F6] transition-all transform active:scale-95 shadow-md"
+          className="flex-shrink-0 p-2.5 sm:p-3 bg-[#3B82F6] text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-[#3B82F6] transition-all transform active:scale-95 shadow-md"
         >
-          <Send className="w-5 h-5 ml-0.5" />
+          <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5 sm:ml-1" />
         </button>
 
       </div>

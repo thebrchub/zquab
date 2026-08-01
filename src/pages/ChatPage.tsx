@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
@@ -11,7 +10,6 @@ import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
-
 type UIMessage = ChatMessage & { isSystem?: boolean };
 
 const compressImageToWebP = (file: File): Promise<File> => {
@@ -64,42 +62,46 @@ export default function ChatPage() {
   const [status, setStatus] = useState<Status>('idle');
   const [messages, setMessages] = useState<UIMessage[]>([]);
   
-  // 🛠️ NEW: Lightbox State
   const [viewingImage, setViewingImage] = useState<string | null>(null);
-
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null); 
-  
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [rulesAgreed, setRulesAgreed] = useState(false);
-  
   const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
   const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
-
   const [partnerUsername, setPartnerUsername] = useState<string | undefined>(undefined);
   const [partnerGender, setPartnerGender] = useState<string | undefined>(undefined);
-
   const [friendRequestSent, setFriendRequestSent] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingStateRef = useRef(false);
-  
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
   const isDev = import.meta.env.DEV;
-
   const statusRef = useRef(status);
+
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  useEffect(() => {
+    if (showMobileMenu || showLeaveConfirm || showRulesModal || showLoginPrompt || viewingImage) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [showMobileMenu, showLeaveConfirm, showRulesModal, showLoginPrompt, viewingImage]);
 
   const handleMockConnect = (type: 'guest' | 'registered') => {
     setStatus('searching');
@@ -366,7 +368,6 @@ export default function ChatPage() {
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)] relative">
       
-      {/* 🛠️ NEW: Fullscreen Lightbox Overlay */}
       <AnimatePresence>
         {viewingImage && (
           <motion.div
@@ -389,7 +390,7 @@ export default function ChatPage() {
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               src={viewingImage}
               alt="Fullscreen view"
-              onClick={(e) => e.stopPropagation()} // Prevents clicking the image from closing it immediately
+              onClick={(e) => e.stopPropagation()} 
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none"
             />
           </motion.div>
@@ -411,12 +412,12 @@ export default function ChatPage() {
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowMobileMenu(false)}
-              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" 
             />
             <motion.div
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="md:hidden fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[101] shadow-2xl flex flex-col border-l border-[var(--border-color)]"
+              className="fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[101] shadow-2xl flex flex-col border-l border-[var(--border-color)]" 
             >
               <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)]">
                 <h3 className="font-bold text-[var(--text-main)]">Dashboard</h3>
@@ -444,7 +445,7 @@ export default function ChatPage() {
 
       <AnimatePresence>
         {showLeaveConfirm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
               <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-red-500/20">
                 <LogOut className="w-8 h-8" />
@@ -499,7 +500,7 @@ export default function ChatPage() {
 
       <AnimatePresence>
         {showLoginPrompt && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
               <div className="w-16 h-16 rounded-full bg-blue-500/10 text-[#3B82F6] flex items-center justify-center mx-auto mb-6">
                 <ShieldAlert className="w-8 h-8" />
@@ -550,7 +551,6 @@ export default function ChatPage() {
             </div>
           )}
           
-          {/* 🛠️ UPDATED: Passing down the onImageClick handler to the bubble */}
           {status !== 'idle' && messages.map(msg => (
             msg.isSystem 
               ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
@@ -568,6 +568,7 @@ export default function ChatPage() {
 
         <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
 
+        {/* 🛠️ RESTORED PHOTO REQUEST POPUP */}
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div

@@ -156,7 +156,7 @@ export default function ConnectionCard({
             {/* Info Box */}
             <div className="mt-4 pt-4 border-t border-[var(--border-color)] w-full">
               <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                This user hasn't created an account yet. You can chat but won't be able to add them as a friend.
+                This user hasn't created an account yet.
               </p>
             </div>
           </div>
