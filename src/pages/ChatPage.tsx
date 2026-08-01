@@ -1,396 +1,316 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { roomsApi } from '../api/rooms';
+import { useWebSocket } from '../context/WebSocketContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
-import ConnectionCard from '../components/chat/ConnectionCard';
+import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
-import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, HeartHandshake, ImageMinus, UserX, ShieldAlert } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 
-type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
-
-// 🛠️ 1. ADDED isUploading to the UI Message Type
-type UIMessage = ChatMessage & { isSystem?: boolean; isUploading?: boolean };
-
-const compressImageToWebP = (file: File): Promise<File> => {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.src = URL.createObjectURL(file);
-    
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let { width, height } = img;
-      
-      const MAX_SIZE = 1200;
-      if (width > MAX_SIZE || height > MAX_SIZE) {
-        if (width > height) {
-          height *= MAX_SIZE / width;
-          width = MAX_SIZE;
-        } else {
-          width *= MAX_SIZE / height;
-          height = MAX_SIZE;
-        }
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject('Canvas context not supported');
-      
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
-            const webpFile = new File([blob], newName, { type: 'image/webp' });
-            resolve(webpFile);
-          } else {
-            reject('Blob creation failed');
-          }
-        },
-        'image/webp',
-        0.8 
-      );
-    };
-    img.onerror = () => reject('Image load failed');
-  });
-};
-
-export default function ChatPage() {
-  const { user } = useAuth();
-  const [status, setStatus] = useState<Status>('idle');
-  const [messages, setMessages] = useState<UIMessage[]>([]);
-  
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const [pendingRoute, setPendingRoute] = useState<string | null>(null); 
-  const [showRulesModal, setShowRulesModal] = useState(false);
-  const [rulesAgreed, setRulesAgreed] = useState(false);
-  const [userCountry, setUserCountry] = useState<{ name: string; code: string } | null>(null);
-  const [partnerCountry, setPartnerCountry] = useState<{ name: string; code: string } | null>(null);
-  const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
-  const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
-  const [partnerUsername, setPartnerUsername] = useState<string | undefined>(undefined);
-  const [partnerGender, setPartnerGender] = useState<string | undefined>(undefined);
-  const [friendRequestSent, setFriendRequestSent] = useState(false);
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-
-  const typingTimeoutRef = useRef<number | null>(null);
-  const isTypingStateRef = useRef(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const photoFileInputRef = useRef<HTMLInputElement>(null);
-  const photoRequestTimeoutRef = useRef<number | null>(null);
+export default function ChatRoom({ 
+  inlineRoomId, 
+  inlineFriendName, 
+  inlineFriendAvatar,
+  inlineFriendUsername,
+  inlineIsOnline
+}: { 
+  inlineRoomId?: string, 
+  inlineFriendName?: string, 
+  inlineFriendAvatar?: string,
+  inlineFriendUsername?: string,
+  inlineIsOnline?: boolean
+} = {}) {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const isDev = import.meta.env.DEV;
-  const statusRef = useRef(status);
+  const routerParams = useParams<{ roomId: string }>();
+  const roomId = inlineRoomId || routerParams.roomId;
+  
+  const friendName = inlineFriendName || location.state?.friendName || 'Chat Room';
+  const friendAvatar = inlineFriendAvatar || location.state?.friendAvatar || null;
+  const friendUsername = inlineFriendUsername || location.state?.friendUsername || ''; 
+  const isOnline = inlineIsOnline ?? location.state?.isOnline ?? false;
+  
+  const isDevMode = location.pathname === '/dev/chat';
+  
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState('');
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const topObserverRef = useRef<HTMLDivElement>(null);
+  const { isConnected, sendMessage, lastMessage } = useWebSocket();
+  const { user } = useAuth();
 
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showSidebar, setShowSidebar] = useState(false); 
+
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const partnerTypingTimeoutRef = useRef<number | null>(null);
+  const myTypingTimeoutRef = useRef<number | null>(null);
+  const isMyTypingStateRef = useRef(false);
+
+  const sentMessageIdsRef = useRef<Set<string>>(new Set());
+
+  // 🛠️ BUG FIX: Robust Sender ID check to keep messages on the correct side
   useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
-  useEffect(() => {
-    if (showMobileMenu || showLeaveConfirm || showRulesModal || showLoginPrompt || viewingImage) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [showMobileMenu, showLeaveConfirm, showRulesModal, showLoginPrompt, viewingImage]);
-
-  const handleMockConnect = (type: 'guest' | 'registered') => {
-    setStatus('searching');
-    setTimeout(() => {
-      setStatus('connected');
-      setPartnerCountry({ name: 'United States', code: 'US' });
-      setPartnerUsername(type === 'registered' ? 'shadow_ninja' : undefined);
-      setPartnerGender(type === 'registered' ? 'Male' : undefined);
-      setFriendRequestSent(false);
-    }, 1500);
-  };
-
-  const handleMockReceiveMessage = () => {
-    if (status !== 'connected') return;
-    setIsPartnerTyping(true);
-    setTimeout(() => {
-      setIsPartnerTyping(false);
-      setMessages(prev => [...prev, { id: `msg-${Date.now()}`, text: 'Hey! This is a mock message from the frontend.', isOwn: false }]);
-    }, 1500);
-  };
-
-  useEffect(() => {
-    const hasAcceptedRules = sessionStorage.getItem('zquab_rules_accepted');
-    if (!hasAcceptedRules) {
-      setShowRulesModal(true);
-    }
-  }, []);
-
-  const handleAcceptRules = () => {
-    if (!rulesAgreed) return;
-    sessionStorage.setItem('zquab_rules_accepted', 'true');
-    setShowRulesModal(false);
-  };
-
-  const clearPhotoRequestTimeout = () => {
-    if (photoRequestTimeoutRef.current !== null) {
-      window.clearTimeout(photoRequestTimeoutRef.current);
-      photoRequestTimeoutRef.current = null;
-    }
-  };
-
-  const chatClient = useMemo(() => {
-    if (isDev) return null; 
-    
-    return new ChatClient({
-      onStatusChange: setStatus,
-      onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
-      onSystemMessage: (text) => {
-        console.log('[Chat System]:', text);
-        setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]);
-      },
-      onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername) => {
-        setPartnerUsername(partnerUsername);
-        if (!partnerLocation) {
-          setPartnerCountry({ name: 'Unknown location', code: '' });
-          return;
-        }
-        const normalized = partnerLocation.trim().replace(/^"|"$/g, '');
-        if (/^[A-Za-z]{2}$/.test(normalized)) {
-          setPartnerCountry({ name: normalized.toUpperCase(), code: normalized.toUpperCase() });
-        } else {
-          setPartnerCountry({ name: normalized, code: '' });
-        }
-      },
-      onFriendAccepted: (dmRoomId) => {
-        setFriendRequestSent(false);
-        navigate(`/chat/${dmRoomId}`);
-      },
-      onLocationDetected: (country) => setUserCountry(country),
-      onPartnerTyping: (isTyping) => setIsPartnerTyping(isTyping),
-      onDisconnected: () => {
-        setStatus('disconnected');
-        setIsPartnerTyping(false); 
-      },
-      onSocketOpen: () => console.log('WebSocket Connected'),
-      onSocketClose: () => console.log('WebSocket Closed'),
-      onError: (error) => console.error('WebSocket Error:', error),
-      onPhotoRequest: () => {
-        setIncomingPhotoRequest(true);
-        setMessages((prev) => [...prev, { id: `sys-pr-${Date.now()}`, text: 'Stranger wants to see a photo of you.', isSystem: true, isOwn: false }]);
-      },
-      onPhotoResponse: (_roomId, _from, accepted) => {
-        clearPhotoRequestTimeout();
-        setPhotoRequestBusy(false);
-        setMessages((prev) => [...prev, { id: `sys-prr-${Date.now()}`, text: accepted ? 'Stranger accepted — waiting for the photo...' : 'Stranger declined your photo request.', isSystem: true, isOwn: false }]);
-      },
-      onPhotoReady: (_roomId, _from, url) => {
-        clearPhotoRequestTimeout();
-        setPhotoRequestBusy(false);
-        setMessages((prev) => [...prev, { id: `msg-photo-${Date.now()}`, text: '', isOwn: false, imageUrl: url }]);
-      },
-    });
-  }, [isDev]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (statusRef.current === 'connected') {
-        e.preventDefault();
-        e.returnValue = ''; 
-      } else {
-        chatClient?.leaveQueueSilently(true);
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      chatClient?.leaveQueueSilently();
-      chatClient?.shutdown();
-      clearPhotoRequestTimeout();
-    };
-  }, [chatClient]); 
-
-  useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
-      if (status !== 'connected') return;
-      const target = (e.target as HTMLElement).closest('a');
-      if (target) {
-        if (target.target === '_blank') return; 
-        e.preventDefault();
-        e.stopPropagation(); 
-        const href = target.getAttribute('href');
-        if (href) {
-          setPendingRoute(href);
-          setShowLeaveConfirm(true); 
-        }
-      }
-    };
-    document.addEventListener('click', handleGlobalClick, { capture: true });
-    return () => document.removeEventListener('click', handleGlobalClick, { capture: true });
-  }, [status]);
-
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-    }
-  }, [messages, status, isPartnerTyping]);
-
-  const handleStartChat = () => {
-    if (isDev) {
-      handleMockConnect('guest');
+    if (isDevMode) {
+      setMessages([
+        { id: '1', content: 'Hey there!', created_at: new Date(Date.now() - 3600000).toISOString(), isOwn: false, status: 'delivered' },
+        { id: '2', content: 'Hi! How are you doing?', created_at: new Date(Date.now() - 3500000).toISOString(), isOwn: true, status: 'read' },
+      ]);
+      setLoading(false);
+      
+      setTimeout(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
       return;
     }
-    setStatus('searching');
-    chatClient?.start().catch((error) => console.error(error));
+
+    if (!roomId) return;
+    
+    const fetchHistory = async () => {
+      try {
+        const history = await roomsApi.getMessages(roomId);
+        const myId = (user as any)?.id || (user as any)?.user_id;
+
+        const formattedHistory = history.map((msg: any) => {
+          // Check all possible field names the backend might use for the sender ID
+          const msgSender = msg.sender_id || msg.user_id || msg.from;
+          return {
+            id: msg.id,
+            content: msg.content || msg.text || '',
+            created_at: msg.created_at || msg.ts || new Date().toISOString(),
+            isOwn: Boolean(msgSender && myId && msgSender === myId),
+            status: 'delivered',
+            imageUrl: msg.image_url || msg.imageUrl
+          };
+        });
+
+        setMessages(formattedHistory.reverse());
+        if (history.length < 50) setHasMore(false);
+        
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 100);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load chat');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+    
+    if (isConnected) {
+      sendMessage('join_room', {}, roomId);
+    }
+
+    return () => {
+      if (isConnected) sendMessage('leave_room', {}, roomId);
+    };
+  }, [roomId, isConnected, isDevMode]);
+
+  useEffect(() => {
+    if (isDevMode || !lastMessage || !roomId) return;
+    
+    if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
+      if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
+        if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
+          sentMessageIdsRef.current.delete(lastMessage.id);
+          return;
+        }
+
+        const parsedTs = Number(lastMessage.ts);
+        const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
+        const myId = (user as any)?.id || (user as any)?.user_id;
+        const msgSender = lastMessage.from || lastMessage.sender_id || lastMessage.user_id;
+        const isOwn = Boolean(msgSender && myId && msgSender === myId);
+        
+        const newMsg = {
+          id: lastMessage.id,
+          content: lastMessage.payload?.text || '', 
+          created_at: new Date(tsMs).toISOString(),
+          isOwn,
+          status: 'delivered'
+        };
+        
+        setMessages(prev => [...prev, newMsg]);
+        setIsPartnerTyping(false);
+        
+        // 🚨 REMOVED THE CRASHING 'READ' EVENT FROM HERE!
+
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 100);
+      }
+      else if (lastMessage.type === 'typing_start' || lastMessage.type === 'typing_status') {
+        setIsPartnerTyping(true);
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 50);
+
+        if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
+        partnerTypingTimeoutRef.current = window.setTimeout(() => setIsPartnerTyping(false), 4000);
+      } 
+      else if (lastMessage.type === 'typing_end') {
+        setIsPartnerTyping(false);
+        if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
+      }
+    }
+  }, [lastMessage, roomId, isDevMode, user]);
+
+  useEffect(() => {
+    if (isDevMode) return;
+
+    const observer = new IntersectionObserver(
+      async (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && messages.length > 0) {
+          setLoadingMore(true);
+          try {
+            const oldestId = messages[0].id;
+            const olderMessages = await roomsApi.getMessages(roomId!, oldestId);
+            if (olderMessages.length < 50) setHasMore(false);
+            
+            const myId = (user as any)?.id || (user as any)?.user_id;
+            const formattedOlder = olderMessages.map((msg: any) => {
+              const msgSender = msg.sender_id || msg.user_id || msg.from;
+              return {
+                id: msg.id,
+                content: msg.content || msg.text || '',
+                created_at: msg.created_at || msg.ts || new Date().toISOString(),
+                isOwn: Boolean(msgSender && myId && msgSender === myId),
+                status: 'delivered',
+                imageUrl: msg.image_url || msg.imageUrl
+              };
+            });
+
+            setMessages(prev => [...formattedOlder.reverse(), ...prev]);
+          } catch (err) {
+            console.error('Failed to load older messages');
+          } finally {
+            setLoadingMore(false);
+          }
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (topObserverRef.current) observer.observe(topObserverRef.current);
+    return () => {
+      if (topObserverRef.current) observer.unobserve(topObserverRef.current);
+    };
+  }, [hasMore, loadingMore, loading, messages, roomId, isDevMode]);
+
+  const handleTyping = () => {
+    if (isDevMode || !isConnected) return;
+    
+    if (!isMyTypingStateRef.current) {
+      isMyTypingStateRef.current = true;
+      sendMessage('typing_start', {}, roomId);
+    }
+
+    if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
+    
+    myTypingTimeoutRef.current = window.setTimeout(() => {
+      isMyTypingStateRef.current = false;
+      sendMessage('typing_end', {}, roomId);
+    }, 2000);
   };
 
   const handleSend = (text: string) => {
-    if (status !== 'connected') return;
+    if (!text.trim()) return;
+    if (!isDevMode && !isConnected) return;
+
+    const localId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+
+    if (!isDevMode) {
+      sendMessage('chat_message', { text }, roomId, undefined, localId);
+      sentMessageIdsRef.current.add(localId);
+
+      if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
+      isMyTypingStateRef.current = false;
+      sendMessage('typing_end', {}, roomId);
+    }
     
-    if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
-    isTypingStateRef.current = false;
-    chatClient?.sendTypingEnd();
-
-    const newId = `msg-${Date.now()}-${Math.random()}`;
-    setMessages((prev) => [...prev, { id: newId, text, isOwn: true }]);
-
-    if (!isDev) {
-      chatClient?.sendChatMessage(text);
-    }
-  };
-
-  const handleTyping = () => {
-    if (status !== 'connected' || isDev) return; 
+    const optimisticMsg = {
+      id: localId,
+      content: text,
+      created_at: new Date().toISOString(),
+      isOwn: true,
+      status: 'sent' as const
+    };
     
-    if (!isTypingStateRef.current) {
-      isTypingStateRef.current = true;
-      chatClient?.sendTypingStart();
-    }
-    if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+    setMessages(prev => [...prev, optimisticMsg]);
     
-    typingTimeoutRef.current = window.setTimeout(() => {
-      isTypingStateRef.current = false;
-      chatClient?.sendTypingEnd();
-    }, 2000); 
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, 100);
   };
 
-  const handleNext = () => {
-    if (isDev) {
-      setMessages([]);
-      handleMockConnect(Math.random() > 0.5 ? 'guest' : 'registered');
-      setShowMobileMenu(false); 
-      return;
-    }
-    chatClient?.nextStranger().catch(() => {});
-    setMessages([]);
-    setShowMobileMenu(false);
-    setIncomingPhotoRequest(false);
-    setPhotoRequestBusy(false);
-    setIsPartnerTyping(false);
-    clearPhotoRequestTimeout();
-  };
-
-  const handleRequestPhoto = () => {
-    if (user?.is_guest) {
-      setShowLoginPrompt(true);
-      return;
-    }
-    if (isDev) {
-      setMessages(prev => [...prev, { id: `sys-${Date.now()}`, text: 'Mock: Photo request sent.', isOwn: false, isSystem: true }]);
-      return;
-    }
-    setPhotoRequestBusy(true);
-    chatClient?.requestPhoto()
-      .then(() => {
-        clearPhotoRequestTimeout();
-        photoRequestTimeoutRef.current = window.setTimeout(() => {
-          photoRequestTimeoutRef.current = null;
-          setPhotoRequestBusy(false);
-          setMessages((prev) => [...prev, { id: `sys-${Date.now()}`, text: "Stranger didn't respond.", isSystem: true, isOwn: false }]);
-        }, 30_000);
-      })
-      .catch(() => setPhotoRequestBusy(false));
-  };
-
-  const handleDeclinePhotoRequest = () => {
-    setIncomingPhotoRequest(false);
-    chatClient?.declinePhotoRequest().catch(() => {});
-  };
-
-  const handleAcceptPhotoRequest = () => {
-    setIncomingPhotoRequest(false);
+  const handleRequestAttachment = () => {
     photoFileInputRef.current?.click();
   };
 
-  const handlePhotoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ''; 
+    e.target.value = '';
     if (!file) return;
 
-    // 🛠️ 2. INSTANT OPTIMISTIC UI: Show the original image locally immediately!
-    const tempId = `msg-upload-${Date.now()}`;
     const localPreviewUrl = URL.createObjectURL(file);
+    const tempId = `msg-img-${Date.now()}`;
+    
+    setMessages((prev) => [...prev, {
+      id: tempId,
+      content: '',
+      created_at: new Date().toISOString(),
+      isOwn: true,
+      status: 'sent',
+      imageUrl: localPreviewUrl
+    }]);
 
-    setMessages((prev) => [
-      ...prev, 
-      { id: tempId, text: '', isOwn: true, imageUrl: localPreviewUrl, isUploading: true }
-    ]);
-
-    try {
-      // 3. Do the heavy WebP compression in the background
-      const webpFile = await compressImageToWebP(file);
-      
-      // 4. Send to backend
-      if (!isDev) await chatClient?.sharePhoto(webpFile);
-
-      // 5. Success! Remove the "isUploading" flag from that specific message
-      setMessages((prev) => prev.map(msg => 
-        msg.id === tempId ? { ...msg, isUploading: false } : msg
-      ));
-    } catch (error) {
-      console.error(error);
-      // 6. Failure: Remove the blurred temp image and show an error
-      setMessages((prev) => prev.filter(msg => msg.id !== tempId));
-      setMessages((prev) => [
-        ...prev, 
-        { id: `sys-err-${Date.now()}`, text: 'Failed to upload photo.', isSystem: true, isOwn: false }
-      ]);
-    }
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, 100);
   };
 
-  const handleAddFriend = () => {
-    if (!user || user.is_guest) {
-      setShowLoginPrompt(true); 
-      return;
-    }
-    if (isDev) {
-      setFriendRequestSent(true);
-      return;
-    }
-    setFriendRequestSent(true);
-    chatClient?.addCurrentPartnerAsFriend().catch((error) => {
-      console.error(error);
-      setFriendRequestSent(false);
-    });
-  };
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[var(--background)]">
+        <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
+      </div>
+    );
+  }
 
-  const handleLeaveConfirm = () => {
-    if (pendingRoute) {
-      navigate(pendingRoute);
-    } else {
-      navigate('/');
-    }
-  };
+  if (error) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[var(--background)]">
+        <p className="text-red-500 font-bold mb-4">{error}</p>
+        <button onClick={() => navigate('/home')} className="px-6 py-2 bg-[var(--card)] border border-[var(--border-color)] rounded-full text-[var(--text-main)] active:scale-95">
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-80px)] relative">
+    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] md:h-full overflow-hidden relative min-h-0 min-w-0">
       
+      <ChatDetailsSidebar 
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+        friendName={friendName}
+        friendAvatar={friendAvatar}
+        friendUsername={friendUsername}
+      />
+
       <AnimatePresence>
         {viewingImage && (
           <motion.div
@@ -402,7 +322,7 @@ export default function ChatPage() {
           >
             <button
               onClick={() => setViewingImage(null)}
-              className="absolute top-4 right-4 md:top-8 md:right-8 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+              className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
@@ -413,227 +333,101 @@ export default function ChatPage() {
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               src={viewingImage}
               alt="Fullscreen view"
-              onClick={(e) => e.stopPropagation()} 
+              onClick={(e) => e.stopPropagation()}
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none"
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {isDev && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 backdrop-blur-md px-4 py-2 rounded-full shadow-lg">
-          <span className="text-xs font-bold text-purple-400 uppercase tracking-wider mr-2">Dev</span>
-          <button onClick={() => handleMockConnect('guest')} className="text-xs bg-purple-500 text-white px-2 py-1 rounded">Guest</button>
-          <button onClick={() => handleMockConnect('registered')} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded">User</button>
-          <button onClick={handleMockReceiveMessage} disabled={status !== 'connected'} className="text-xs bg-green-500 text-white px-2 py-1 rounded disabled:opacity-50">Msg</button>
-        </div>
-      )}
-
-      <AnimatePresence>
-        {showMobileMenu && (
-          <>
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowMobileMenu(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" 
-            />
-            <motion.div
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[101] shadow-2xl flex flex-col border-l border-[var(--border-color)]" 
-            >
-              <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)]">
-                <h3 className="font-bold text-[var(--text-main)]">Dashboard</h3>
-                <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-[var(--card)] rounded-full border border-[var(--border-color)] text-[var(--text-main)] active:scale-95 transition-transform">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 pb-8">
-                <ConnectionCard 
-                  status={status} 
-                  onNext={handleNext} 
-                  userCountry={userCountry} 
-                  partnerCountry={partnerCountry} 
-                  partnerUsername={partnerUsername}
-                  partnerGender={partnerGender}
-                  onAddFriend={handleAddFriend}
-                  friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
-                  onLeaveConfirm={() => setShowLeaveConfirm(true)} 
-                />
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showLeaveConfirm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
-              <div className="w-16 h-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-red-500/20">
-                <LogOut className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Leave Chat?</h3>
-              <p className="text-[var(--text-muted)] mb-8 leading-relaxed">
-                Are you sure you want to leave? This chat will be gone forever and cannot be recovered.
-              </p>
-              <div className="flex flex-col gap-3">
-                <button onClick={handleLeaveConfirm} className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors">
-                  Yes, Leave Chat
-                </button>
-                <button onClick={() => { setShowLeaveConfirm(false); setPendingRoute(null); }} className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showRulesModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <motion.div initial={{ scale: 0.95, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, y: 20, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]">
-              <h3 className="text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar mt-4">
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <HeartHandshake className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
-                  <p className="text-sm text-[var(--text-muted)]">No bullying, racism, harassment, or abusive language.</p>
-                </div>
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <ImageMinus className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
-                  <p className="text-sm text-[var(--text-muted)]">You cannot send photos directly. The stranger must request it first.</p>
-                </div>
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <UserX className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
-                  <p className="text-sm text-[var(--text-muted)]">Do not share sensitive personal details or contact information.</p>
-                </div>
-              </div>
-              <label onClick={() => setRulesAgreed(!rulesAgreed)} className="flex items-center gap-3 cursor-pointer mb-6 group">
-                <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${rulesAgreed ? 'bg-[#3B82F6] border-[#3B82F6]' : 'border-[var(--text-muted)]'}`}>
-                  {rulesAgreed && <Check className="w-4 h-4 text-white" />}
-                </div>
-                <span className="text-sm text-[var(--text-muted)] select-none">I agree to the Community Rules.</span>
-              </label>
-              <button onClick={handleAcceptRules} disabled={!rulesAgreed} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold disabled:opacity-50">I Understand & Agree</button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showLoginPrompt && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
-              <div className="w-16 h-16 rounded-full bg-blue-500/10 text-[#3B82F6] flex items-center justify-center mx-auto mb-6">
-                <ShieldAlert className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Create an Account</h3>
-              <p className="text-[var(--text-muted)] mb-8 text-sm">You are browsing as a guest. Create an account to add friends and save connections.</p>
-              <div className="flex flex-col gap-3">
-                <button onClick={() => navigate('/auth')} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold">Log In / Sign Up</button>
-                <button onClick={() => setShowLoginPrompt(false)} className="w-full py-4 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold">Maybe Later</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] md:rounded-2xl md:border md:border-[var(--border-color)] overflow-hidden relative">
-        <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
-          <div className="flex items-center gap-3">
-            <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
-          </div>
-          <div className="md:hidden flex items-center gap-2">
-            {status === 'idle' && <><div className="w-2.5 h-2.5 rounded-full bg-zinc-400" /> <span className="text-sm font-semibold text-zinc-400">Waiting</span></>}
-            {status === 'searching' && <><div className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] animate-ping" /> <span className="text-sm font-semibold text-[#3B82F6]">Searching</span></>}
-            {status === 'connected' && <><div className="w-2.5 h-2.5 rounded-full bg-green-500" /> <span className="text-sm font-semibold text-green-500">Connected</span></>}
-          </div>
-          <div className="flex md:hidden items-center gap-1.5">
-            {status !== 'idle' && (
-              <button onClick={handleNext} className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
-                <UserPlus className="w-4 h-4" /> Next
-              </button>
-            )}
-            <button onClick={() => setShowMobileMenu(true)} className="p-1.5 text-[var(--text-muted)] hover:bg-[var(--border-color)] rounded-lg transition-colors">
-              <MoreVertical className="w-5 h-5" />
-            </button>
+      <input
+        ref={photoFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoSelected}
+        className="hidden"
+      />
+      
+      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2 z-10 w-full min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <button 
+            onClick={() => navigate('/home')} 
+            className="p-2 -ml-1 sm:-ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0 md:hidden"
+          >
+            <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
+          
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0 flex items-center justify-center">
+              {friendAvatar ? (
+                <img src={friendAvatar} alt={friendName} className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--text-muted)]" />
+              )}
+            </div>
+            <div className="flex flex-col justify-center min-w-0">
+              <h2 className="font-bold text-[var(--text-main)] leading-tight text-sm sm:text-lg truncate">
+                {isDevMode ? 'UI Testing Room' : friendName}
+              </h2>
+              {isOnline ? (
+                <p className="text-xs text-green-500 font-medium">Online</p>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)] font-medium">Offline</p>
+              )}
+            </div>
           </div>
         </div>
         
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-[var(--background)]/30 min-h-0 relative">
-          {status === 'idle' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <button onClick={handleStartChat} className="bg-[#3B82F6] text-white px-10 py-4 rounded-full font-bold text-lg shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 transition-all">Start Chatting</button>
-            </div>
-          )}
-          {status === 'searching' && (
-            <div className="h-full flex flex-col items-center justify-center text-[var(--text-muted)] gap-4">
-              <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
-              <p className="font-medium animate-pulse">Looking for someone interesting...</p>
-            </div>
-          )}
-          
-          {/* 🛠️ 7. Passed the isUploading flag into MessageBubble */}
-          {status !== 'idle' && messages.map(msg => (
-            msg.isSystem 
-              ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
-              : <MessageBubble 
-                  key={msg.id} 
-                  message={msg.text} 
-                  isOwn={msg.isOwn} 
-                  imageUrl={msg.imageUrl} 
-                  isUploading={msg.isUploading}
-                  onImageClick={msg.imageUrl && !msg.isUploading ? () => setViewingImage(msg.imageUrl!) : undefined}
-                />
-          ))}
-          
-          {isPartnerTyping && <TypingIndicator />}
-        </div>
-
-        <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
-
-        <AnimatePresence>
-          {incomingPhotoRequest && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-xl border border-[var(--border-color)] shadow-xl p-4 z-30"
-            >
-              <p className="text-sm font-medium text-[var(--text-main)] mb-3 flex items-center gap-2">
-                <Image className="w-4 h-4 text-[#3B82F6]" /> Stranger wants to see a photo of you.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={handleDeclinePhotoRequest} className="flex items-center justify-center gap-2 glass hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 text-[var(--text-muted)] py-2.5 rounded-xl font-medium transition-all">
-                  <X className="w-4 h-4" /> Decline
-                </button>
-                <button onClick={handleAcceptPhotoRequest} className="flex items-center justify-center gap-2 bg-[#3B82F6] hover:bg-blue-600 text-white py-2.5 rounded-xl font-medium transition-all">
-                  <Check className="w-4 h-4" /> Accept
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="flex-shrink-0 z-20 w-full">
-          <ChatInput onSend={handleSend} disabled={status !== 'connected'} onRequestPhoto={handleRequestPhoto} photoRequestDisabled={photoRequestBusy || status === 'idle'} onTyping={handleTyping} />
-        </div>
+        <button 
+          onClick={() => setShowSidebar(true)} 
+          className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0"
+        >
+          <MoreVertical className="w-5 h-5" />
+        </button>
       </div>
 
-      <div className="hidden md:block w-80 h-full flex-shrink-0">
-        <ConnectionCard 
-          status={status} 
-          onNext={handleNext} 
-          userCountry={userCountry} 
-          partnerCountry={partnerCountry} 
-          partnerUsername={partnerUsername}
-          partnerGender={partnerGender}
-          onAddFriend={handleAddFriend}
-          friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
-          onLeaveConfirm={() => setShowLeaveConfirm(true)} 
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0 min-w-0 w-full flex flex-col"
+      >
+        <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2 flex-shrink-0">
+          {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
+        </div>
+        
+        {messages.length === 0 && !isPartnerTyping ? (
+          <div className="text-center text-[var(--text-muted)] font-medium mt-8 sm:mt-10 bg-[var(--card)] border border-[var(--border-color)] p-3 sm:p-4 rounded-xl mx-auto max-w-xs text-sm sm:text-base">
+            No messages yet. Say hello!
+          </div>
+        ) : (
+          <div className="space-y-2 sm:space-y-3 min-w-0 w-full flex flex-col">
+            {messages.map((msg, index) => (
+              <MessageBubble 
+                key={msg.id || index}
+                content={msg.content}
+                isOwn={msg.isOwn}
+                status={msg.status}
+                time={msg.created_at}
+                imageUrl={(msg as any).imageUrl}
+                onImageClick={(url) => setViewingImage(url!)}
+              />
+            ))}
+            
+            {isPartnerTyping && (
+              <TypingIndicator />
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10 w-full min-w-0">
+        <ChatInput 
+          onSend={handleSend}
+          disabled={!isDevMode && !isConnected}
+          onTyping={handleTyping}
+          onDirectImageClick={handleRequestAttachment}
         />
       </div>
+      
     </div>
   );
 }

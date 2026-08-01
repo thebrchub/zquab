@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
-import { useWebSocket } from '../context/WebSocketContext';
 import { Loader2, MessageSquare, Bell, Search, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +36,8 @@ export default function HomePage() {
   const navigate = useNavigate();
   const location = useLocation(); 
   const { user } = useAuth(); 
-  const { sendMessage, isConnected } = useWebSocket(); 
+  
+  // 🛠️ FIXED: Removed the unused useWebSocket hook here!
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -68,14 +68,13 @@ export default function HomePage() {
     fetchDashboardData();
   }, []);
 
-  // 1. Sync URL to selectedChat cleanly without firing events prematurely
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const roomIdParam = params.get('room');
 
     if (roomIdParam && rooms.length > 0) {
       const room = rooms.find(r => r.room_id === roomIdParam);
-      const myId = (user as any)?.user_id || (user as any)?.id;
+      const myId = (user as any)?.id || (user as any)?.user_id;
       const partnerId = room?.member_ids.find(id => id !== myId);
       const partner = partnerId ? usersMap[partnerId] : null;
       
@@ -86,29 +85,21 @@ export default function HomePage() {
         avatar: location.state?.friendAvatar || partner?.avatar_url,
         isOnline: location.state?.isOnline ?? partner?.is_online 
       });
+
+      setRooms(prevRooms => {
+        const roomIndex = prevRooms.findIndex(r => r.room_id === roomIdParam);
+        if (roomIndex >= 0 && prevRooms[roomIndex].unread_count > 0) {
+          const updatedRooms = [...prevRooms];
+          updatedRooms[roomIndex] = { ...updatedRooms[roomIndex], unread_count: 0 };
+          return updatedRooms;
+        }
+        return prevRooms;
+      });
+
     } else if (!roomIdParam) {
       setSelectedChat(null);
     }
   }, [location.search, location.state, rooms.length, user, usersMap]); 
-
-  // 🛠️ BUG 2 FIX (Part B): Dedicated Read Event Emitter that safely WAITS for the WebSocket to connect
-  useEffect(() => {
-    if (!selectedChat?.roomId || !isConnected || rooms.length === 0) return;
-
-    const roomIndex = rooms.findIndex(r => r.room_id === selectedChat.roomId);
-    if (roomIndex >= 0 && rooms[roomIndex].unread_count > 0) {
-      
-      // Tell backend to definitively mark it read
-      sendMessage('read', {}, selectedChat.roomId);
-      
-      // Clear local UI instantly so we don't spam the socket
-      setRooms(prevRooms => {
-        const updated = [...prevRooms];
-        updated[roomIndex] = { ...updated[roomIndex], unread_count: 0 };
-        return updated;
-      });
-    }
-  }, [selectedChat?.roomId, isConnected, rooms, sendMessage]); 
 
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 
@@ -219,7 +210,7 @@ export default function HomePage() {
                 ) : (
                   <div className="divide-y divide-[var(--border-color)]">
                     {rooms.map((room) => {
-                      const myId = (user as any)?.user_id || (user as any)?.id;
+                      const myId = (user as any)?.id || (user as any)?.user_id;
                       const partnerId = room.member_ids.find(id => id !== myId);
                       const partner = partnerId ? usersMap[partnerId] : null;
                       const partnerName = partner?.name || 'Unknown User';

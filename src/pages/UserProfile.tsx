@@ -263,13 +263,19 @@ export default function UserProfile() {
                 to={`/user/${friend.username}`}
                 className="bg-[var(--card)] border border-[var(--border-color)] rounded-2xl p-4 flex flex-col items-center text-center hover:border-[#3B82F6] transition-all hover:shadow-md group"
               >
-                <div className="w-16 h-16 rounded-full bg-[var(--background)] border border-[var(--border-color)] overflow-hidden mb-3 group-hover:scale-105 transition-transform">
-                  {friend.avatar_url ? (
-                    <img src={friend.avatar_url} alt={friend.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center font-bold text-xl text-[var(--text-muted)]">
-                      {friend.name.charAt(0).toUpperCase()}
-                    </div>
+                <div className="relative mb-3">
+                  <div className="w-16 h-16 rounded-full bg-[var(--background)] border border-[var(--border-color)] overflow-hidden group-hover:scale-105 transition-transform">
+                    {friend.avatar_url ? (
+                      <img src={friend.avatar_url} alt={friend.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-xl text-[var(--text-muted)]">
+                        {friend.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  {/* 🛠️ ADDED: Online status indicator */}
+                  {friend.is_online && (
+                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-[var(--card)] rounded-full animate-pulse"></div>
                   )}
                 </div>
                 <h3 className="font-bold text-[var(--text-main)] text-sm w-full truncate">{friend.name}</h3>
