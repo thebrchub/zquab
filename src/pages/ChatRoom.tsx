@@ -59,7 +59,7 @@ export default function ChatRoom({
 
   const sentMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // 🛠️ BUG 1 FIX: Properly map backend history data to the UI format so isOwn is calculated
+  // 🛠️ FETCH HISTORY & MERGE OPTIMISTIC MESSAGES
   useEffect(() => {
     if (isDevMode) {
       setMessages([
@@ -67,10 +67,6 @@ export default function ChatRoom({
         { id: '2', content: 'Hi! How are you doing?', created_at: new Date(Date.now() - 3500000).toISOString(), isOwn: true, status: 'read' },
       ]);
       setLoading(false);
-      
-      setTimeout(() => {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }, 100);
       return;
     }
 
@@ -79,20 +75,33 @@ export default function ChatRoom({
     const fetchHistory = async () => {
       try {
         const history = await roomsApi.getMessages(roomId);
-        
-        // Ensure we check both user_id and id just in case of context variations
         const myId = (user as any)?.user_id || (user as any)?.id;
 
-        const formattedHistory = history.map((msg: any) => ({
-          id: msg.id,
-          content: msg.content || msg.text || '',
-          created_at: msg.created_at || msg.ts || new Date().toISOString(),
-          isOwn: Boolean(msg.from && myId && msg.from === myId), // 🛠️ Explicitly mapping the side!
-          status: 'delivered',
-          imageUrl: msg.image_url || msg.imageUrl
-        }));
+        const formattedHistory = history.map((msg: any) => {
+          const msgSender = msg.sender_id; // 🛠️ Strictly using sender_id as per backend docs
+          return {
+            id: msg.id,
+            content: msg.content || msg.text || '',
+            created_at: msg.created_at || msg.ts || new Date().toISOString(),
+            isOwn: Boolean(msgSender && myId && msgSender === myId),
+            status: 'delivered',
+            imageUrl: msg.image_url || msg.imageUrl
+          };
+        });
 
-        setMessages(formattedHistory.reverse());
+        // 🛠️ SESSION RECONCILIATION: Grab optimistic messages that haven't hit DB yet
+        const storedOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
+        const historyIds = new Set(formattedHistory.map((m: any) => m.id));
+        
+        // Filter out stored messages that are now officially in the backend history or are too old (>10s)
+        const pendingOpts = storedOpts.filter((opt: any) => {
+          const age = Date.now() - new Date(opt.created_at).getTime();
+          return !historyIds.has(opt.id) && age < 10000;
+        });
+        
+        sessionStorage.setItem(`opts_${roomId}`, JSON.stringify(pendingOpts));
+
+        setMessages([...formattedHistory.reverse(), ...pendingOpts]);
         if (history.length < 50) setHasMore(false);
         
         setTimeout(() => {
@@ -108,19 +117,21 @@ export default function ChatRoom({
     fetchHistory();
     
     if (isConnected) {
-      sendMessage('join_room', {}, roomId);
+      sendMessage('join_room', undefined, roomId);
     }
 
     return () => {
-      if (isConnected) sendMessage('leave_room', {}, roomId);
+      if (isConnected) sendMessage('leave_room', undefined, roomId);
     };
-  }, [roomId, isConnected, isDevMode]);
+  }, [roomId, isConnected, isDevMode, user]);
 
+  // 🛠️ WEBSOCKET MESSAGE HANDLER
   useEffect(() => {
     if (isDevMode || !lastMessage || !roomId) return;
     
     if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
-      if (lastMessage.type === 'chat_message' || lastMessage.type === 'message_delivered' || lastMessage.type === 'message_sent_confirm') {
+      // 🛠️ FIXED: Replaced 'message_delivered' with 'delivered'
+      if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered' || lastMessage.type === 'message_sent_confirm') {
         if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
           sentMessageIdsRef.current.delete(lastMessage.id);
           return;
@@ -129,7 +140,8 @@ export default function ChatRoom({
         const parsedTs = Number(lastMessage.ts);
         const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
         const myId = (user as any)?.user_id || (user as any)?.id;
-        const isOwn = Boolean(lastMessage.from && myId && lastMessage.from === myId);
+        const msgSender = lastMessage.sender_id || lastMessage.from; // Fallback to from for live socket if needed
+        const isOwn = Boolean(msgSender && myId && msgSender === myId);
         
         const newMsg = {
           id: lastMessage.id,
@@ -142,9 +154,9 @@ export default function ChatRoom({
         setMessages(prev => [...prev, newMsg]);
         setIsPartnerTyping(false);
         
-        // 🛠️ BUG 2 FIX (Part A): If we are currently looking at the chat and receive a live message, tell the server we read it immediately!
+        // 🛠️ FIXED: Send exact 'read' event as requested by backend if the message isn't ours
         if (!isOwn && isConnected) {
-          sendMessage('read', {}, roomId);
+          sendMessage('read', undefined, roomId);
         }
 
         setTimeout(() => {
@@ -165,7 +177,7 @@ export default function ChatRoom({
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
       }
     }
-  }, [lastMessage, roomId, isDevMode, isConnected, sendMessage, user]);
+  }, [lastMessage, roomId, isDevMode, user, isConnected, sendMessage]);
 
   useEffect(() => {
     if (isDevMode) return;
@@ -180,14 +192,17 @@ export default function ChatRoom({
             if (olderMessages.length < 50) setHasMore(false);
             
             const myId = (user as any)?.user_id || (user as any)?.id;
-            const formattedOlder = olderMessages.map((msg: any) => ({
-              id: msg.id,
-              content: msg.content || msg.text || '',
-              created_at: msg.created_at || msg.ts || new Date().toISOString(),
-              isOwn: Boolean(msg.from && myId && msg.from === myId),
-              status: 'delivered',
-              imageUrl: msg.image_url || msg.imageUrl
-            }));
+            const formattedOlder = olderMessages.map((msg: any) => {
+              const msgSender = msg.sender_id; 
+              return {
+                id: msg.id,
+                content: msg.content || msg.text || '',
+                created_at: msg.created_at || msg.ts || new Date().toISOString(),
+                isOwn: Boolean(msgSender && myId && msgSender === myId),
+                status: 'delivered',
+                imageUrl: msg.image_url || msg.imageUrl
+              };
+            });
 
             setMessages(prev => [...formattedOlder.reverse(), ...prev]);
           } catch (err) {
@@ -204,21 +219,21 @@ export default function ChatRoom({
     return () => {
       if (topObserverRef.current) observer.unobserve(topObserverRef.current);
     };
-  }, [hasMore, loadingMore, loading, messages, roomId, isDevMode]);
+  }, [hasMore, loadingMore, loading, messages, roomId, isDevMode, user]);
 
   const handleTyping = () => {
     if (isDevMode || !isConnected) return;
     
     if (!isMyTypingStateRef.current) {
       isMyTypingStateRef.current = true;
-      sendMessage('typing_start', {}, roomId);
+      sendMessage('typing_start', undefined, roomId);
     }
 
     if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
     
     myTypingTimeoutRef.current = window.setTimeout(() => {
       isMyTypingStateRef.current = false;
-      sendMessage('typing_end', {}, roomId);
+      sendMessage('typing_end', undefined, roomId);
     }, 2000);
   };
 
@@ -234,7 +249,7 @@ export default function ChatRoom({
 
       if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
       isMyTypingStateRef.current = false;
-      sendMessage('typing_end', {}, roomId);
+      sendMessage('typing_end', undefined, roomId);
     }
     
     const optimisticMsg = {
@@ -246,6 +261,10 @@ export default function ChatRoom({
     };
     
     setMessages(prev => [...prev, optimisticMsg]);
+    
+    // 🛠️ SESSION OPTIMISTIC SAVE: Instantly save to memory so it survives a 3-second refresh!
+    const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
+    sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
     
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -264,14 +283,19 @@ export default function ChatRoom({
     const localPreviewUrl = URL.createObjectURL(file);
     const tempId = `msg-img-${Date.now()}`;
     
-    setMessages((prev) => [...prev, {
+    const optimisticMsg = {
       id: tempId,
       content: '',
       created_at: new Date().toISOString(),
       isOwn: true,
       status: 'sent',
       imageUrl: localPreviewUrl
-    }]);
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg as any]);
+    
+    const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
+    sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
 
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

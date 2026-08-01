@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { friendsApi } from '../api/friends'; 
+import { useWebSocket } from '../context/WebSocketContext'; // 🛠️ RESTORED!
 import { Loader2, MessageSquare, Bell, Search, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +38,8 @@ export default function HomePage() {
   const location = useLocation(); 
   const { user } = useAuth(); 
   
-  // 🛠️ FIXED: Removed the unused useWebSocket hook here!
+  // 🛠️ RESTORED THE HOOK
+  const { sendMessage, isConnected } = useWebSocket(); 
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -74,7 +76,7 @@ export default function HomePage() {
 
     if (roomIdParam && rooms.length > 0) {
       const room = rooms.find(r => r.room_id === roomIdParam);
-      const myId = (user as any)?.id || (user as any)?.user_id;
+      const myId = (user as any)?.user_id || (user as any)?.id;
       const partnerId = room?.member_ids.find(id => id !== myId);
       const partner = partnerId ? usersMap[partnerId] : null;
       
@@ -86,20 +88,28 @@ export default function HomePage() {
         isOnline: location.state?.isOnline ?? partner?.is_online 
       });
 
-      setRooms(prevRooms => {
-        const roomIndex = prevRooms.findIndex(r => r.room_id === roomIdParam);
-        if (roomIndex >= 0 && prevRooms[roomIndex].unread_count > 0) {
-          const updatedRooms = [...prevRooms];
-          updatedRooms[roomIndex] = { ...updatedRooms[roomIndex], unread_count: 0 };
-          return updatedRooms;
-        }
-        return prevRooms;
-      });
-
     } else if (!roomIdParam) {
       setSelectedChat(null);
     }
   }, [location.search, location.state, rooms.length, user, usersMap]); 
+
+  // 🛠️ RESTORED THE UNREAD BADGE CLEARER: This successfully hits the backend now!
+  useEffect(() => {
+    if (!selectedChat?.roomId || !isConnected || rooms.length === 0) return;
+
+    const roomIndex = rooms.findIndex(r => r.room_id === selectedChat.roomId);
+    if (roomIndex >= 0 && rooms[roomIndex].unread_count > 0) {
+      
+      // Sending exact 'read' type with no payload as per backend specs
+      sendMessage('read', undefined, selectedChat.roomId);
+      
+      setRooms(prevRooms => {
+        const updated = [...prevRooms];
+        updated[roomIndex] = { ...updated[roomIndex], unread_count: 0 };
+        return updated;
+      });
+    }
+  }, [selectedChat?.roomId, isConnected, rooms, sendMessage]);
 
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 
@@ -210,7 +220,7 @@ export default function HomePage() {
                 ) : (
                   <div className="divide-y divide-[var(--border-color)]">
                     {rooms.map((room) => {
-                      const myId = (user as any)?.id || (user as any)?.user_id;
+                      const myId = (user as any)?.user_id || (user as any)?.id;
                       const partnerId = room.member_ids.find(id => id !== myId);
                       const partner = partnerId ? usersMap[partnerId] : null;
                       const partnerName = partner?.name || 'Unknown User';
