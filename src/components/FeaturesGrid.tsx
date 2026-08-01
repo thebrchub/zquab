@@ -87,7 +87,7 @@ export default function FeaturesGrid() {
               title={feature.title}
               description={feature.description}
               // Dynamically construct the image path with the suffix and extension
-              image={`${feature.baseImage}${imageSuffix}.png`}
+              image={`${feature.baseImage}${imageSuffix}.webp`}
               delay={index * 0.1}
             />
           ))}

@@ -42,13 +42,13 @@ export default function Hero() {
         {/* Foolproof React Conditional Rendering */}
         {theme === 'light' ? (
           <img 
-            src="/hero-w.png" 
+            src="/hero-w.webp" 
             alt="Background Waves Light" 
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
         ) : (
           <img 
-            src="/hero-d.png" 
+            src="/hero-d.webp" 
             alt="Background Waves Dark" 
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           />
