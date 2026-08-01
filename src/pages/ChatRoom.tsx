@@ -8,13 +8,13 @@ import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar'; // 🛠️ 1. Import Sidebar
+import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 
 export default function ChatRoom({ 
   inlineRoomId, 
   inlineFriendName, 
   inlineFriendAvatar,
-  inlineFriendUsername // 🛠️ 2. Added inlineFriendUsername prop
+  inlineFriendUsername 
 }: { 
   inlineRoomId?: string, 
   inlineFriendName?: string, 
@@ -29,7 +29,7 @@ export default function ChatRoom({
   
   const friendName = inlineFriendName || location.state?.friendName || 'Chat Room';
   const friendAvatar = inlineFriendAvatar || location.state?.friendAvatar || null;
-  const friendUsername = inlineFriendUsername || location.state?.friendUsername || ''; // 🛠️ 3. Added friendUsername extraction
+  const friendUsername = inlineFriendUsername || location.state?.friendUsername || ''; 
   
   const isDevMode = location.pathname === '/dev/chat';
   
@@ -47,7 +47,7 @@ export default function ChatRoom({
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
 
-  const [showSidebar, setShowSidebar] = useState(false); // 🛠️ 4. Added Sidebar State
+  const [showSidebar, setShowSidebar] = useState(false); 
 
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const partnerTypingTimeoutRef = useRef<number | null>(null);
@@ -263,9 +263,9 @@ export default function ChatRoom({
   }
 
   return (
-    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] md:h-full overflow-hidden relative min-h-0">
+    
+    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] md:h-full overflow-hidden relative min-h-0 min-w-0">
       
-      {/* 🛠️ 5. Render ChatDetailsSidebar */}
       <ChatDetailsSidebar 
         isOpen={showSidebar}
         onClose={() => setShowSidebar(false)}
@@ -311,7 +311,7 @@ export default function ChatRoom({
         className="hidden"
       />
       
-      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2 z-10">
+      <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2 z-10 w-full min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <button 
             onClick={() => navigate('/home')} 
@@ -337,7 +337,6 @@ export default function ChatRoom({
           </div>
         </div>
         
-        {/* 🛠️ 6. Open Sidebar on Click */}
         <button 
           onClick={() => setShowSidebar(true)} 
           className="p-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0"
@@ -346,9 +345,10 @@ export default function ChatRoom({
         </button>
       </div>
 
+      {/* 🛠️ ADDED min-w-0 and w-full HERE to keep the scroll area strictly contained */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0"
+        className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-3 sm:py-4 pb-2 custom-scrollbar bg-[var(--background)] min-h-0 min-w-0 w-full"
       >
         <div ref={topObserverRef} className="h-4 w-full flex justify-center py-2 mb-2">
           {loadingMore && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
@@ -379,7 +379,7 @@ export default function ChatRoom({
         )}
       </div>
 
-      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10">
+      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10 w-full min-w-0">
         <ChatInput 
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
