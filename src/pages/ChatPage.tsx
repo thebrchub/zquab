@@ -10,7 +10,9 @@ import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
-type UIMessage = ChatMessage & { isSystem?: boolean };
+
+// 🛠️ 1. ADDED isUploading to the UI Message Type
+type UIMessage = ChatMessage & { isSystem?: boolean; isUploading?: boolean };
 
 const compressImageToWebP = (file: File): Promise<File> => {
   return new Promise((resolve, reject) => {
@@ -331,13 +333,34 @@ export default function ChatPage() {
     e.target.value = ''; 
     if (!file) return;
 
+    // 🛠️ 2. INSTANT OPTIMISTIC UI: Show the original image locally immediately!
+    const tempId = `msg-upload-${Date.now()}`;
+    const localPreviewUrl = URL.createObjectURL(file);
+
+    setMessages((prev) => [
+      ...prev, 
+      { id: tempId, text: '', isOwn: true, imageUrl: localPreviewUrl, isUploading: true }
+    ]);
+
     try {
+      // 3. Do the heavy WebP compression in the background
       const webpFile = await compressImageToWebP(file);
+      
+      // 4. Send to backend
       if (!isDev) await chatClient?.sharePhoto(webpFile);
-      const previewUrl = URL.createObjectURL(webpFile);
-      setMessages((prev) => [...prev, { id: `msg-${Date.now()}`, text: '', isOwn: true, imageUrl: previewUrl }]);
+
+      // 5. Success! Remove the "isUploading" flag from that specific message
+      setMessages((prev) => prev.map(msg => 
+        msg.id === tempId ? { ...msg, isUploading: false } : msg
+      ));
     } catch (error) {
       console.error(error);
+      // 6. Failure: Remove the blurred temp image and show an error
+      setMessages((prev) => prev.filter(msg => msg.id !== tempId));
+      setMessages((prev) => [
+        ...prev, 
+        { id: `sys-err-${Date.now()}`, text: 'Failed to upload photo.', isSystem: true, isOwn: false }
+      ]);
     }
   };
 
@@ -551,6 +574,7 @@ export default function ChatPage() {
             </div>
           )}
           
+          {/* 🛠️ 7. Passed the isUploading flag into MessageBubble */}
           {status !== 'idle' && messages.map(msg => (
             msg.isSystem 
               ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>
@@ -559,7 +583,8 @@ export default function ChatPage() {
                   message={msg.text} 
                   isOwn={msg.isOwn} 
                   imageUrl={msg.imageUrl} 
-                  onImageClick={msg.imageUrl ? () => setViewingImage(msg.imageUrl!) : undefined}
+                  isUploading={msg.isUploading}
+                  onImageClick={msg.imageUrl && !msg.isUploading ? () => setViewingImage(msg.imageUrl!) : undefined}
                 />
           ))}
           
@@ -568,7 +593,6 @@ export default function ChatPage() {
 
         <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
 
-        {/* 🛠️ RESTORED PHOTO REQUEST POPUP */}
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div
