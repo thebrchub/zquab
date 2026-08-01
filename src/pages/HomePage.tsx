@@ -45,7 +45,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<Tab>('chats');
   
-  const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string } | null>(null);
+  // 🛠️ 1. Add isOnline to the state interface
+  const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string, isOnline?: boolean } | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -82,7 +83,8 @@ export default function HomePage() {
         roomId: roomIdParam, 
         name: location.state?.friendName || partner?.name || 'Chat Room', 
         username: location.state?.friendUsername || partner?.username || '',
-        avatar: location.state?.friendAvatar || partner?.avatar_url 
+        avatar: location.state?.friendAvatar || partner?.avatar_url,
+        isOnline: location.state?.isOnline ?? partner?.is_online // 🛠️ 2. Pass it to state
       });
 
       setRooms(prevRooms => {
@@ -103,9 +105,9 @@ export default function HomePage() {
     }
   }, [location.search, location.state, user, usersMap, isConnected, sendMessage, rooms]);
 
-  const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string) => {
+  const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 
-      state: { friendName: partnerName, friendUsername: partnerUsername, friendAvatar: partnerAvatar } 
+      state: { friendName: partnerName, friendUsername: partnerUsername, friendAvatar: partnerAvatar, isOnline: partnerIsOnline } 
     });
   };
 
@@ -225,7 +227,7 @@ export default function HomePage() {
                       return (
                         <div 
                           key={room.room_id} 
-                          onClick={() => handleRoomClick(room, partnerName, partnerUsername, partner?.avatar_url)}
+                          onClick={() => handleRoomClick(room, partnerName, partnerUsername, partner?.avatar_url, partner?.is_online)}
                           className={`p-4 transition-colors flex items-center gap-4 cursor-pointer ${
                             isSelected ? 'bg-[var(--card)] border-l-4 border-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
                           }`}
@@ -339,6 +341,7 @@ export default function HomePage() {
             inlineFriendName={selectedChat.name}
             inlineFriendAvatar={selectedChat.avatar}
             inlineFriendUsername={selectedChat.username}
+            inlineIsOnline={selectedChat.isOnline}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-[var(--background)]">

@@ -14,12 +14,14 @@ export default function ChatRoom({
   inlineRoomId, 
   inlineFriendName, 
   inlineFriendAvatar,
-  inlineFriendUsername 
+  inlineFriendUsername, 
+  inlineIsOnline
 }: { 
   inlineRoomId?: string, 
   inlineFriendName?: string, 
   inlineFriendAvatar?: string,
   inlineFriendUsername?: string
+  inlineIsOnline?: boolean
 } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,6 +32,7 @@ export default function ChatRoom({
   const friendName = inlineFriendName || location.state?.friendName || 'Chat Room';
   const friendAvatar = inlineFriendAvatar || location.state?.friendAvatar || null;
   const friendUsername = inlineFriendUsername || location.state?.friendUsername || ''; 
+  const isOnline = inlineIsOnline ?? location.state?.isOnline ?? false;
   
   const isDevMode = location.pathname === '/dev/chat';
   
@@ -331,7 +334,12 @@ export default function ChatRoom({
               <h2 className="font-bold text-[var(--text-main)] leading-tight text-sm sm:text-lg truncate">
                 {isDevMode ? 'UI Testing Room' : friendName}
               </h2>
-              <p className="text-xs text-green-500 font-medium">Online</p>
+              
+              {isOnline ? (
+                <p className="text-xs text-green-500 font-medium">Online</p>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)] font-medium">Offline</p>
+              )}
             </div>
           </div>
         </div>
