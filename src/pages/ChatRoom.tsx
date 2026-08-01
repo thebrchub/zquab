@@ -135,9 +135,11 @@ export default function ChatRoom({
       sendMessage('join_room', undefined, roomId);
     }
 
-    return () => {
-      if (isConnected) sendMessage('leave_room', undefined, roomId);
-    };
+    // No leave_room here: register() already auto-joins every active room for
+    // the whole connection lifetime (loadUserRooms), so this cleanup used to
+    // actively unsubscribe you from the room's live broadcasts the moment you
+    // switched to another conversation (or on any reconnect blip) — meaning
+    // new messages in that room went undelivered until you reopened it.
   }, [roomId, isConnected, isDevMode, user]);
 
   // 🛠️ WEBSOCKET MESSAGE HANDLER
