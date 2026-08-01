@@ -10,6 +10,7 @@ interface SearchResult {
   username: string;
   avatar_url: string;
   is_private: boolean;
+  is_online?: boolean; // 🛠️ 1. Added the online flag to the interface
 }
 
 export default function SearchPage() {
@@ -113,13 +114,20 @@ export default function SearchPage() {
                 to={`/user/${result.username}`}
                 className="flex items-center p-4 bg-[var(--card)] border border-[var(--border-color)] rounded-2xl hover:border-[#3B82F6] transition-all group active:scale-[0.98]"
               >
-                <div className="w-14 h-14 rounded-full bg-[var(--background)] overflow-hidden flex-shrink-0 flex items-center justify-center border border-[var(--border-color)]">
-                  {result.avatar_url ? (
-                    <img src={result.avatar_url} alt={result.username} className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-7 h-7 text-[var(--text-muted)]" />
+                {/* 🛠️ 2. Wrapped the avatar in a relative div and added the green online dot */}
+                <div className="relative flex-shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-[var(--background)] overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
+                    {result.avatar_url ? (
+                      <img src={result.avatar_url} alt={result.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-7 h-7 text-[var(--text-muted)]" />
+                    )}
+                  </div>
+                  {result.is_online && (
+                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[var(--card)] rounded-full"></div>
                   )}
                 </div>
+
                 <div className="ml-4 flex-1 overflow-hidden">
                   <h3 className="font-bold text-[var(--text-main)] text-lg truncate">{result.name || result.username}</h3>
                   <p className="text-sm text-[var(--text-muted)] font-medium truncate">@{result.username}</p>
