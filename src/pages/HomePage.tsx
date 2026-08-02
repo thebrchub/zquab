@@ -37,24 +37,16 @@ export default function HomePage() {
 
   // Tell the shared rooms context which room is currently open, so it can
   // skip bumping this room's badge on new messages and mark it read.
-  // 🚨 UNTOUCHED LOGIC
   useEffect(() => {
     setActiveRoomId(selectedChat?.roomId ?? null);
   }, [selectedChat?.roomId, setActiveRoomId]);
 
-  // 🚨 CAREFULLY TWEAKED FOR MEMORY ONLY - Core logic remains identical
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const roomIdParam = params.get('room');
 
     if (roomIdParam && rooms.length > 0) {
       const room = rooms.find(r => r.room_id === roomIdParam);
-      
-      // 🛠️ UX TWEAK: Silently remember the active room for this session
-      if (room) {
-        sessionStorage.setItem('active_zquab_room', roomIdParam);
-      }
-
       const myId = (user as any)?.user_id || (user as any)?.id;
       const partnerId = room?.member_ids.find(id => id !== myId);
       const partner = partnerId ? usersMap[partnerId] : null;
@@ -69,19 +61,10 @@ export default function HomePage() {
         isOnline: partner?.is_online ?? location.state?.isOnline
       });
 
-    } else if (!roomIdParam && rooms.length > 0) {
-      // 🛠️ UX TWEAK: Restore memory if navigating back to /home without a room parameter
-      const rememberedRoom = sessionStorage.getItem('active_zquab_room');
-      
-      // If we remember a room, and it still exists in our active rooms list, redirect to it!
-      if (rememberedRoom && rooms.some(r => r.room_id === rememberedRoom)) {
-        navigate(`/home?room=${rememberedRoom}`, { replace: true });
-        return; 
-      }
-      
+    } else if (!roomIdParam) {
       setSelectedChat(null);
     }
-  }, [location.search, location.state, rooms.length, user, usersMap, navigate]); 
+  }, [location.search, location.state, rooms.length, user, usersMap]); 
 
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 
@@ -128,8 +111,7 @@ export default function HomePage() {
   }
 
   return (
-    
-    <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] bg-[var(--background)] overflow-hidden relative border-t border-[var(--border-color)] dark:border-transparent">
+    <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] bg-[var(--background)] overflow-hidden relative">
       
       <div className={`flex-col h-full bg-[var(--background)] border-r border-[var(--border-color)] transition-all duration-300 ${
         selectedChat ? 'hidden md:flex w-80 lg:w-96 flex-shrink-0' : 'flex w-full md:w-80 lg:w-96 flex-shrink-0'
