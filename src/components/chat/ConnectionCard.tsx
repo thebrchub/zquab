@@ -131,34 +131,27 @@ export default function ConnectionCard({
 
         {/* 🛠️ ANONYMOUS PROFILE PLACEHOLDER */}
         {status === 'connected' && !partnerUsername && (
-          <div className="bg-[var(--background)]/50 p-6 rounded-3xl border border-[var(--border-color)] border-dashed flex flex-col items-center justify-center text-center relative">
+          <div className="bg-[var(--background)]/50 py-6 px-4 rounded-3xl border border-[var(--border-color)] border-dashed flex flex-col items-center justify-center text-center relative">
             
-            {/* Avatar Container with Question Mark */}
-            <div className="relative mb-3 group">
-              <div className="w-20 h-20 bg-gray-500/10 border-2 border-gray-500/20 rounded-full flex items-center justify-center shadow-sm">
+            {/* Avatar Container - NOW A BUTTON FOR MOBILE TAPS */}
+            <button type="button" className="relative mb-3 group focus:outline-none">
+              <div className="w-20 h-20 bg-gray-500/10 border-2 border-gray-500/20 rounded-full flex items-center justify-center shadow-sm transition-colors group-hover:border-gray-500/40 group-focus:border-gray-500/40">
                 <HelpCircle className="w-10 h-10 text-gray-500" />
               </div>
               
-              {/* Hover Tooltip */}
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                <div className="bg-gray-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap z-10">
-                  Not logged in
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+              {/* Hover / Tap Tooltip */}
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200 pointer-events-none z-20">
+                <div className="bg-[var(--text-main)] text-[var(--background)] text-xs font-bold px-3 py-2 rounded-xl shadow-xl whitespace-nowrap">
+                  No account created
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-[var(--text-main)]"></div>
                 </div>
               </div>
-            </div>
+            </button>
             
             <span className="font-black text-[var(--text-main)] text-xl leading-tight mb-1">Anonymous</span>
             <span className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-bold">
               Guest User
             </span>
-            
-            {/* Info Box */}
-            <div className="mt-4 pt-4 border-t border-[var(--border-color)] w-full">
-              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                This user hasn't created an account yet.
-              </p>
-            </div>
           </div>
         )}
 

@@ -1,67 +1,132 @@
-import { Shield, Flag, ShieldBan, Heart } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 export default function Safety() {
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const faqs = [
+    {
+      q: "Is zQuab anonymous?",
+      a: "Yes. You can start chatting without creating an account. When accounts are introduced, you'll still control how much information you choose to share."
+    },
+    {
+      q: "Is zQuab free?",
+      a: "Yes. Stranger Chat is free to use."
+    },
+    {
+      q: "Can I block someone?",
+      a: "Blocking features will become available for registered users in a future update."
+    },
+    {
+      q: "Can I report abusive behaviour?",
+      a: "Reporting tools are currently under development and will be introduced alongside account-based moderation features."
+    },
+    {
+      q: "Should I share my personal information?",
+      a: "No. We recommend keeping conversations anonymous until you genuinely trust the other person."
+    }
+  ];
+
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-12 md:py-20">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-16"
-      >
-        <div className="w-16 h-16 bg-blue-500/10 text-[#3B82F6] rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <Shield className="w-8 h-8" />
-        </div>
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-[var(--text-main)]">Trust & Safety</h1>
-        <p className="text-lg text-[var(--text-muted)] max-w-2xl mx-auto">
-          We built zQuab to be a fun, spontaneous way to meet people. Here is how we keep the community clean and safe for everyone.
+    <main className="w-full max-w-4xl mx-auto px-4 sm:px-8 py-10 md:py-12 bg-[var(--background)] min-h-screen">
+      
+      {/* Header */}
+      <div className="mb-10 border-b border-[var(--border-color)] pb-6">
+        <h1 className="text-3xl font-bold text-[var(--text-main)] mb-2">Trust & Safety Policy</h1>
+        <p className="text-sm text-[var(--text-muted)]">
+          At zQuab, we believe the best conversations happen when people feel safe, respected, and in control. This document outlines our guidelines and your responsibilities while using our platform.
         </p>
-      </motion.div>
-
-      <div className="space-y-8">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass p-8 rounded-3xl border border-[var(--border-color)]">
-          <h2 className="text-2xl font-bold mb-6 text-[var(--text-main)] flex items-center gap-3">
-            <Heart className="w-6 h-6 text-[#3B82F6]" />
-            Community Guidelines
-          </h2>
-          <ul className="space-y-4 text-[var(--text-muted)]">
-            <li className="flex items-start gap-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] mt-2 flex-shrink-0" />
-              <p><strong className="text-[var(--text-main)]">Be Respectful:</strong> Treat the person on the other side of the screen like a human being. Harassment, hate speech, and bullying are strictly prohibited.</p>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] mt-2 flex-shrink-0" />
-              <p><strong className="text-[var(--text-main)]">Keep it Clean:</strong> No explicit content, unwanted sexual advances, or sharing of illicit materials.</p>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] mt-2 flex-shrink-0" />
-              <p><strong className="text-[var(--text-main)]">Protect Privacy:</strong> Do not share your personal information (like your real name, address, or financial details), and never ask others for theirs.</p>
-            </li>
-          </ul>
-        </motion.div>
-
-        <div className="grid md:grid-cols-2 gap-8">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass p-8 rounded-3xl border border-[var(--border-color)]">
-            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-xl flex items-center justify-center mb-6">
-              <Flag className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold mb-3 text-[var(--text-main)]">Reporting</h3>
-            <p className="text-[var(--text-muted)]">
-              If someone makes you uncomfortable, use the Report button in the chat menu. Our moderation system reviews flagged behavior to remove bad actors from the platform.
-            </p>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass p-8 rounded-3xl border border-[var(--border-color)]">
-            <div className="w-12 h-12 bg-orange-500/10 text-orange-500 rounded-xl flex items-center justify-center mb-6">
-              <ShieldBan className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold mb-3 text-[var(--text-main)]">Blocking</h3>
-            <p className="text-[var(--text-muted)]">
-              You are always in control. Hitting the Block button immediately ends the conversation and ensures you will never be matched with that specific user again.
-            </p>
-          </motion.div>
-        </div>
       </div>
-    </div>
+
+      <div className="space-y-10 text-[var(--text-main)] text-sm sm:text-base leading-relaxed">
+        
+        {/* Section 1 */}
+        <section>
+          <h2 className="text-xl font-bold mb-4">1. Community Guidelines</h2>
+          <p className="text-[var(--text-muted)] mb-4">
+            Every conversation on zQuab starts with mutual respect. These guidelines help keep the experience enjoyable for everyone.
+          </p>
+          <ul className="list-disc pl-5 space-y-3 text-[var(--text-muted)]">
+            <li><strong className="text-[var(--text-main)]">Be Respectful:</strong> Treat the person on the other side as a real human being. Harassment, hate speech, bullying, discrimination, or intimidation have no place on zQuab.</li>
+            <li><strong className="text-[var(--text-main)]">Keep It Clean:</strong> Avoid sharing explicit content, illegal material, or unwanted sexual advances. Respect boundaries.</li>
+            <li><strong className="text-[var(--text-main)]">Protect Your Privacy:</strong> Never share sensitive personal information such as your home address, financial information, passwords, or government identification.</li>
+            <li><strong className="text-[var(--text-main)]">Respect Consent:</strong> If someone does not want to continue the conversation, respect their decision. A meaningful conversation should always be voluntary.</li>
+          </ul>
+        </section>
+
+        {/* Section 2 */}
+        <section>
+          <h2 className="text-xl font-bold mb-4">2. Privacy First</h2>
+          <div className="text-[var(--text-muted)] space-y-3">
+            <p>
+              Unlike many online platforms, zQuab is built around conversations—not collecting personal information.
+            </p>
+            <p>
+              We encourage users to protect their identity while chatting and to only share personal details when they genuinely trust the other person. Your privacy is your responsibility, and we are committed to giving you the tools to stay in control.
+            </p>
+          </div>
+        </section>
+
+        {/* Section 3 */}
+        <section>
+          <h2 className="text-xl font-bold mb-4">3. Staying Safe While Chatting</h2>
+          <p className="text-[var(--text-muted)] mb-4">
+            Keep these practices in mind to ensure your online chats remain positive and secure:
+          </p>
+          <ul className="list-disc pl-5 space-y-2 text-[var(--text-muted)]">
+            <li>Avoid sharing your exact location.</li>
+            <li>Never send passwords or banking information.</li>
+            <li>Be cautious when moving conversations to other platforms.</li>
+            <li>Trust your instincts. If something feels wrong, leave the conversation.</li>
+            <li>Remember that it is okay to end a chat at any time.</li>
+          </ul>
+        </section>
+
+        {/* Section 4 */}
+        <section>
+          <h2 className="text-xl font-bold mb-4">4. Reporting & Blocking</h2>
+          <p className="text-[var(--text-muted)]">
+            As zQuab evolves, we will introduce reporting and blocking tools for registered users to help maintain a healthy community. During our early release, we encourage users to simply leave any conversation that makes them uncomfortable. Your comfort and safety always come first.
+          </p>
+        </section>
+
+        {/* Section 5 */}
+        <section>
+          <h2 className="text-xl font-bold mb-4">5. Our Philosophy</h2>
+          <div className="text-[var(--text-muted)] space-y-3">
+            <p>
+              Technology should make it easier to meet people, not harder to trust them. Our mission is not simply to connect strangers; it is to create an environment where conversations feel natural, respectful, and meaningful.
+            </p>
+            <p>
+              Every feature we build is guided by three principles: Privacy, Simplicity, and Human Connection.
+            </p>
+          </div>
+        </section>
+
+        {/* Section 6 - FAQ */}
+        <section className="pt-4">
+          <h2 className="text-xl font-bold mb-4">6. Frequently Asked Questions</h2>
+          <div className="border-t border-[var(--border-color)]">
+            {faqs.map((faq, index) => (
+              <div key={index} className="border-b border-[var(--border-color)]">
+                <button 
+                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                  className="w-full flex items-center justify-between py-4 text-left focus:outline-none"
+                >
+                  <span className="font-semibold text-[var(--text-main)] text-sm sm:text-base pr-4">{faq.q}</span>
+                  <ChevronDown className={`w-5 h-5 text-[var(--text-muted)] flex-shrink-0 transition-transform duration-200 ${openFaq === index ? 'rotate-180' : ''}`} />
+                </button>
+                {openFaq === index && (
+                  <div className="pb-4 text-[var(--text-muted)] text-sm sm:text-base leading-relaxed">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+      </div>
+    </main>
   );
 }

@@ -94,16 +94,17 @@ export default function ChatPage() {
     statusRef.current = status;
   }, [status]);
 
+  // 🛠️ THE FIX: Strictly lock the global body scroll while on the Chat Page
+  // This prevents the mobile keyboard from pushing the header behind the navbar
   useEffect(() => {
-    if (showMobileMenu || showLeaveConfirm || showRulesModal || showLoginPrompt || viewingImage) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none'; // Prevents mobile pull-to-refresh bounce
+    
     return () => {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = '';
+      document.body.style.overscrollBehavior = '';
     };
-  }, [showMobileMenu, showLeaveConfirm, showRulesModal, showLoginPrompt, viewingImage]);
+  }, []);
 
   const handleMockConnect = (type: 'guest' | 'registered') => {
     setStatus('searching');
@@ -333,7 +334,6 @@ export default function ChatPage() {
     e.target.value = ''; 
     if (!file) return;
 
-    // 🛠️ 2. INSTANT OPTIMISTIC UI: Show the original image locally immediately!
     const tempId = `msg-upload-${Date.now()}`;
     const localPreviewUrl = URL.createObjectURL(file);
 
@@ -343,19 +343,13 @@ export default function ChatPage() {
     ]);
 
     try {
-      // 3. Do the heavy WebP compression in the background
       const webpFile = await compressImageToWebP(file);
-      
-      // 4. Send to backend
       if (!isDev) await chatClient?.sharePhoto(webpFile);
-
-      // 5. Success! Remove the "isUploading" flag from that specific message
       setMessages((prev) => prev.map(msg => 
         msg.id === tempId ? { ...msg, isUploading: false } : msg
       ));
     } catch (error) {
       console.error(error);
-      // 6. Failure: Remove the blurred temp image and show an error
       setMessages((prev) => prev.filter(msg => msg.id !== tempId));
       setMessages((prev) => [
         ...prev, 
@@ -389,7 +383,8 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-65px)] md:h-[calc(100dvh-82px)] relative">
+    
+    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-82px)] relative">
       
       <AnimatePresence>
         {viewingImage && (
@@ -574,7 +569,6 @@ export default function ChatPage() {
             </div>
           )}
           
-          {/* 🛠️ 7. Passed the isUploading flag into MessageBubble */}
           {status !== 'idle' && messages.map(msg => (
             msg.isSystem 
               ? <div key={msg.id} className="text-center text-xs tracking-wide uppercase text-[var(--text-muted)] font-bold my-6">{msg.text}</div>

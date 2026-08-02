@@ -128,7 +128,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] bg-[var(--background)] overflow-hidden relative">
+    <div className="flex w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-83px)] bg-[var(--background)] overflow-hidden relative">
       
       <div className={`flex-col h-full bg-[var(--background)] border-r border-[var(--border-color)] transition-all duration-300 ${
         selectedChat ? 'hidden md:flex w-80 lg:w-96 flex-shrink-0' : 'flex w-full md:w-80 lg:w-96 flex-shrink-0'
