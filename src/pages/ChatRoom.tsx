@@ -363,7 +363,7 @@ export default function ChatRoom({
   }
 
   return (
-    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] md:h-full overflow-hidden relative min-h-0 min-w-0">
+    <div className="flex flex-col bg-[var(--background)] w-full h-[calc(100dvh-64px)] sm:h-[calc(100dvh-85px)] md:h-full overflow-hidden relative min-h-0 min-w-0">
       
       <ChatDetailsSidebar 
         isOpen={showSidebar}

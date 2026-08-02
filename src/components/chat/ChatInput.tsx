@@ -1,5 +1,5 @@
 import { Send, Smile, Image as ImageIcon, Info, Paperclip, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 
@@ -7,7 +7,7 @@ interface Props {
   onSend: (msg: string) => void;
   disabled: boolean;
   onRequestPhoto?: () => void;
-  onDirectImageClick?: () => void; // 🛠️ NEW: Bypasses the request drawer for direct uploads
+  onDirectImageClick?: () => void;
   photoRequestDisabled?: boolean;
   onTyping?: () => void;
 }
@@ -16,17 +16,35 @@ export default function ChatInput({
   onSend, 
   disabled, 
   onRequestPhoto, 
-  onDirectImageClick, // 🛠️ Destructure the new prop
+  onDirectImageClick, 
   photoRequestDisabled,
   onTyping
 }: Props) {
   const [text, setText] = useState('');
   const [showDrawer, setShowDrawer] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  
+  // 🛠️ NEW: Ref to control textarea height dynamically
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
     if (onTyping) onTyping();
+
+    // 🛠️ Auto-resize logic: expand height as user types, up to a max limit
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'; // Reset to calculate true height
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  };
+
+  // 🛠️ NEW: Keydown handler for Enter vs Shift+Enter
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Stop it from creating a new line
+      handleSend();
+    }
+    // If Shift + Enter is pressed, do nothing and let it naturally go to the next line
   };
 
   const handleSend = () => {
@@ -35,6 +53,11 @@ export default function ChatInput({
     setText('');
     setShowDrawer(false);
     setShowEmoji(false); 
+    
+    // Reset textarea height after sending
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
   return (
@@ -103,21 +126,20 @@ export default function ChatInput({
         )}
       </AnimatePresence>
 
-      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 w-full max-w-5xl mx-auto pb-safe">
+      <div className="flex items-end gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 w-full max-w-5xl mx-auto pb-safe">
         
-        {/* 🛠️ UPDATED: Handles both Request (Stranger) and Direct Click (Friend) */}
         {(onRequestPhoto || onDirectImageClick) && (
           <button
             onClick={() => {
               if (onDirectImageClick) {
-                onDirectImageClick(); // Friend Chat: Open file picker instantly!
+                onDirectImageClick(); 
               } else {
-                setShowDrawer(!showDrawer); // Stranger Chat: Open warning drawer
+                setShowDrawer(!showDrawer); 
                 setShowEmoji(false); 
               }
             }}
             disabled={disabled}
-            className={`p-2 sm:p-2.5 rounded-full transition-colors flex-shrink-0 ${
+            className={`p-2 sm:p-2.5 rounded-full transition-colors flex-shrink-0 mb-0.5 ${
               showDrawer 
                 ? 'bg-[#3B82F6] text-white' 
                 : 'text-[var(--text-muted)] hover:text-[#3B82F6] hover:bg-[var(--background)]'
@@ -127,35 +149,38 @@ export default function ChatInput({
           </button>
         )}
 
-        <div className="flex-1 flex items-center gap-1 sm:gap-2 bg-[var(--background)] border border-[var(--border-color)] focus-within:border-[#3B82F6] focus-within:ring-1 focus-within:ring-[#3B82F6] rounded-full px-1.5 sm:px-2 py-1 transition-all">
+        <div className="flex-1 flex items-end gap-1 sm:gap-2 bg-[var(--background)] border border-[var(--border-color)] focus-within:border-[#3B82F6] focus-within:ring-1 focus-within:ring-[#3B82F6] rounded-3xl px-1.5 sm:px-2 py-1 transition-all">
           <button 
             onClick={() => {
               setShowEmoji(!showEmoji);
               setShowDrawer(false); 
             }}
             disabled={disabled}
-            className={`p-1.5 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+            className={`p-1.5 rounded-full transition-colors flex-shrink-0 mb-0.5 disabled:opacity-50 ${
               showEmoji ? 'text-[#3B82F6] bg-[var(--card)]' : 'text-[var(--text-muted)] hover:text-[#3B82F6]'
             }`}
           >
             <Smile className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           
-          <input
-            type="text"
+          {/* 🛠️ CHANGED: input to textarea */}
+          <textarea
+            ref={textareaRef}
+            rows={1}
             value={text}
             onChange={handleChange}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={disabled ? "Waiting..." : "Message..."}
-            className="flex-1 min-w-0 bg-transparent outline-none py-1.5 sm:py-2 pr-2 text-[var(--text-main)] placeholder:text-[var(--text-muted)] disabled:opacity-50 text-sm sm:text-base"
+            className="flex-1 min-w-0 bg-transparent outline-none py-2 pr-2 text-[var(--text-main)] placeholder:text-[var(--text-muted)] disabled:opacity-50 text-sm sm:text-base resize-none custom-scrollbar"
+            style={{ maxHeight: '120px' }}
           />
         </div>
         
         <button
           onClick={handleSend}
           disabled={!text.trim() || disabled}
-          className="flex-shrink-0 p-2.5 sm:p-3 bg-[#3B82F6] text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-[#3B82F6] transition-all transform active:scale-95 shadow-md"
+          className="flex-shrink-0 mb-0.5 p-2.5 sm:p-3 bg-[#3B82F6] text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-[#3B82F6] transition-all transform active:scale-95 shadow-md"
         >
           <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5 sm:ml-1" />
         </button>
