@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
-import { LAST_ROOM_STORAGE_KEY } from '../context/RoomsContext';
+import { LAST_ROOM_STORAGE_KEY, useRooms } from '../context/RoomsContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
@@ -47,6 +47,7 @@ export default function ChatRoom({
   const topObserverRef = useRef<HTMLDivElement>(null);
   const { isConnected, sendMessage, lastMessage } = useWebSocket();
   const { user } = useAuth();
+  const { bumpOwnMessage } = useRooms();
 
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
@@ -307,6 +308,10 @@ export default function ChatRoom({
     // 🛠️ SESSION OPTIMISTIC SAVE: Instantly save to memory so it survives a 3-second refresh!
     const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
     sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
+
+    // The chat_message broadcast excludes the sending socket, so this tab's
+    // own room list would otherwise never see this message move it to the top.
+    if (roomId) bumpOwnMessage(roomId, text);
     
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -338,6 +343,8 @@ export default function ChatRoom({
     
     const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
     sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
+
+    if (roomId) bumpOwnMessage(roomId, '📷 Photo');
 
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

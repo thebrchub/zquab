@@ -35,6 +35,12 @@ interface RoomsContextType {
   // chat_message events don't bump its badge (it's already being read),
   // and so it gets marked read the moment it's opened / tab regains focus.
   setActiveRoomId: (roomId: string | null) => void;
+  // Locally patch a room's preview/ordering right after sending a message.
+  // The chat_message WS broadcast deliberately excludes the sending socket
+  // (to avoid echo), so the sender's own tab never receives it back —
+  // without this, the sender's own room list would never move that room to
+  // the top or update its preview for a message it just sent itself.
+  bumpOwnMessage: (roomId: string, preview: string) => void;
 }
 
 const RoomsContext = createContext<RoomsContextType | null>(null);
@@ -187,6 +193,20 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [isConnected, sendMessage]);
 
+  const bumpOwnMessage = useCallback((roomId: string, preview: string) => {
+    setRooms(prevRooms => {
+      const idx = prevRooms.findIndex(r => r.room_id === roomId);
+      if (idx === -1) return prevRooms;
+      const updatedRoom = {
+        ...prevRooms[idx],
+        last_message_preview: preview,
+        last_message_at: new Date().toISOString(),
+      };
+      const rest = prevRooms.filter((_, i) => i !== idx);
+      return [updatedRoom, ...rest];
+    });
+  }, []);
+
   // Mark the active room read as soon as it's opened, and catch up on
   // whatever accumulated while the tab was backgrounded once it's visible
   // again — instead of leaving it stuck unread until reselected.
@@ -206,8 +226,8 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
   const totalUnread = useMemo(() => rooms.reduce((acc, r) => acc + (r.unread_count || 0), 0), [rooms]);
 
   const value = useMemo(
-    () => ({ rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId }),
-    [rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId]
+    () => ({ rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId, bumpOwnMessage }),
+    [rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId, bumpOwnMessage]
   );
 
   return <RoomsContext.Provider value={value}>{children}</RoomsContext.Provider>;
