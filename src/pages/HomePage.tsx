@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { friendsApi } from '../api/friends'; 
-import { useRooms, type Room } from '../context/RoomsContext';
+import { useRooms, LAST_ROOM_STORAGE_KEY, type Room } from '../context/RoomsContext';
 import { Loader2, MessageSquare, Bell, UserPlus, Check, X, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -65,6 +65,23 @@ export default function HomePage() {
       setSelectedChat(null);
     }
   }, [location.search, location.state, rooms.length, user, usersMap]); 
+
+  // Resume the last-open conversation when landing on a bare /home (e.g.
+  // navigating away to another page and back to Inbox) instead of always
+  // dropping to the empty "select a conversation" list. An explicit close
+  // (ChatRoom's mobile back button) clears the stored key itself, so this
+  // never resurrects a chat the user deliberately backed out of.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('room')) return; // an explicit room is already requested
+    if (rooms.length === 0) return; // wait for rooms to load before deciding
+
+    const lastRoomId = sessionStorage.getItem(LAST_ROOM_STORAGE_KEY);
+    if (!lastRoomId) return;
+    if (!rooms.some(r => r.room_id === lastRoomId)) return; // stale/deleted room
+
+    navigate(`/home?room=${lastRoomId}`, { replace: true });
+  }, [location.search, rooms, navigate]);
 
   const handleRoomClick = (room: Room, partnerName: string, partnerUsername: string, partnerAvatar?: string, partnerIsOnline?: boolean) => {
     navigate(`/home?room=${room.room_id}`, { 

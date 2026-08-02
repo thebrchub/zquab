@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { roomsApi } from '../api/rooms';
 import { useWebSocket } from '../context/WebSocketContext';
+import { LAST_ROOM_STORAGE_KEY } from '../context/RoomsContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
@@ -91,7 +92,7 @@ export default function ChatRoom({
             content: msg.content || msg.text || '',
             created_at: msg.created_at || msg.ts || new Date().toISOString(),
             isOwn: Boolean(msgSender && myId && msgSender === myId),
-            status: 'delivered',
+            status: msg.status || 'delivered', // backend computes read/delivered/sent per message
             imageUrl: msg.image_url || msg.imageUrl
           };
         });
@@ -238,7 +239,7 @@ export default function ChatRoom({
                 content: msg.content || msg.text || '',
                 created_at: msg.created_at || msg.ts || new Date().toISOString(),
                 isOwn: Boolean(msgSender && myId && msgSender === myId),
-                status: 'delivered',
+                status: msg.status || 'delivered', // backend computes read/delivered/sent per message
                 imageUrl: msg.image_url || msg.imageUrl
               };
             });
@@ -413,7 +414,12 @@ export default function ChatRoom({
       <div className="flex-shrink-0 flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border-color)] pt-safe gap-2 z-10 w-full min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <button 
-            onClick={() => navigate('/home')} 
+            onClick={() => {
+              // Explicit close — clear the resume-on-return memory so
+              // navigating back to a bare /home shows the list, not this chat.
+              sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
+              navigate('/home');
+            }} 
             className="p-2 -ml-1 sm:-ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0 md:hidden"
           >
             <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />

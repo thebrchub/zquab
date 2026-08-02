@@ -39,6 +39,10 @@ interface RoomsContextType {
 
 const RoomsContext = createContext<RoomsContextType | null>(null);
 
+// Shared with HomePage (resume-on-return) and ChatRoom (explicit-close clears
+// it) so both know to use the exact same sessionStorage key.
+export const LAST_ROOM_STORAGE_KEY = 'zquab_last_active_room';
+
 // Single source of truth for the rooms list + aggregate unread count, shared
 // by Navbar and HomePage (and anything else that needs it) instead of each
 // maintaining its own independent copy that can drift out of sync.
@@ -50,7 +54,16 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [usersMap, setUsersMap] = useState<Record<string, RoomUser>>({});
   const [loading, setLoading] = useState(true);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [activeRoomId, setActiveRoomIdState] = useState<string | null>(null);
+
+  // Remember whichever room is opened so returning to the inbox (e.g. after
+  // navigating to a different page) can resume it. An explicit close (e.g.
+  // ChatRoom's mobile back button) removes this key directly so it doesn't
+  // get resurrected — this effect only ever writes, never clears.
+  const setActiveRoomId = useCallback((roomId: string | null) => {
+    setActiveRoomIdState(roomId);
+    if (roomId) sessionStorage.setItem(LAST_ROOM_STORAGE_KEY, roomId);
+  }, []);
 
   const roomsRef = useRef(rooms);
   useEffect(() => { roomsRef.current = rooms; }, [rooms]);
@@ -131,6 +144,30 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [lastMessage]);
 
+  // A read receipt is broadcast to every one of the reader's own
+  // connections (not just the tab that sent it — see deliverToRoom in the
+  // chat engine), so this fires in every tab, including the one that never
+  // called markRoomRead itself. Zero the badge there too instead of leaving
+  // it stale until that tab's own refresh/visibility catch-up.
+  useEffect(() => {
+    if (!lastMessage || lastMessage.type !== 'read') return;
+
+    const msgRoomId = lastMessage.room_id || lastMessage.roomId;
+    if (!msgRoomId) return;
+
+    const myId = (user as any)?.user_id || (user as any)?.id;
+    const readerId = lastMessage.sender_id || lastMessage.from;
+    if (!readerId || !myId || readerId !== myId) return; // only our own read, not the partner's
+
+    setRooms(prev => {
+      const idx = prev.findIndex(r => r.room_id === msgRoomId);
+      if (idx === -1 || prev[idx].unread_count === 0) return prev;
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], unread_count: 0 };
+      return updated;
+    });
+  }, [lastMessage, user]);
+
   // Sends the read receipt + zeroes the local badge, but only while the tab
   // is actually visible — a backgrounded tab can still receive this room's
   // WS traffic and re-run this, which would mark messages read that the
@@ -170,7 +207,7 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId }),
-    [rooms, usersMap, totalUnread, loading, refreshRooms]
+    [rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId]
   );
 
   return <RoomsContext.Provider value={value}>{children}</RoomsContext.Provider>;
