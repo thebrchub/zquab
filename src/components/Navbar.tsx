@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
-import { Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search } from 'lucide-react';
+import { Loader2, LogIn, MessageSquare, User, BookOpen, Info, Menu, X, Search, Bell, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRooms } from '../context/RoomsContext';
+import { friendsApi } from '../api/friends'; 
 
 export default function Navbar() {
   const location = useLocation();
@@ -17,17 +18,31 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { totalUnread } = useRooms();
-
+  // 🛠️ THE FIX: Aliased `loading` to `isLoadingRequests` to solve both TS errors!
+  const { totalUnread, friendRequests, setFriendRequests, loading: isLoadingRequests } = useRooms();
+  
   const isFullUser = user && !user.is_guest;
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsNotificationsOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (isStaticPage) {
@@ -40,6 +55,7 @@ export default function Navbar() {
       
       if (currentScrollY > lastScrollY && currentScrollY > 80) {
         setIsVisible(false);
+        setIsNotificationsOpen(false); 
       } else {
         setIsVisible(true);
       }
@@ -68,6 +84,26 @@ export default function Navbar() {
       alert('Failed to connect. Please try again.');
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleAcceptRequest = async (e: React.MouseEvent, username: string) => {
+    e.stopPropagation(); 
+    try {
+      await friendsApi.acceptRequest(username);
+      setFriendRequests(prev => prev.filter(req => req.username !== username));
+    } catch (error) {
+      console.error('Failed to accept request:', error);
+    }
+  };
+
+  const handleRejectRequest = async (e: React.MouseEvent, username: string) => {
+    e.stopPropagation(); 
+    try {
+      await friendsApi.rejectRequest(username);
+      setFriendRequests(prev => prev.filter(req => req.username !== username));
+    } catch (error) {
+      console.error('Failed to reject request:', error);
     }
   };
 
@@ -133,7 +169,99 @@ export default function Navbar() {
               <Link to="/search" className="p-2 sm:p-2.5 text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-full transition-colors active:scale-95" aria-label="Search">
                 <Search className="w-5 h-5 sm:w-6 sm:h-6" />
               </Link>
-              <ThemeToggle />
+              
+              <div className="relative" ref={dropdownRef}>
+                <button 
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className={`relative p-2 sm:p-2.5 rounded-full transition-colors active:scale-95 ${
+                    isNotificationsOpen ? 'bg-[var(--border-color)] text-[var(--text-main)]' : 'text-[var(--text-main)] hover:bg-[var(--border-color)]'
+                  }`}
+                  aria-label="Notifications"
+                >
+                  <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
+                  {isFullUser && friendRequests.length > 0 && (
+                    <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-[var(--background)] rounded-full"></span>
+                  )}
+                </button>
+
+                {isNotificationsOpen && (
+                  
+                  <div className="fixed top-[72px] left-4 right-4 sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:mt-3 sm:w-80 bg-[var(--card)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden flex flex-col z-50">
+                    <div className="p-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--background)]">
+                      <h3 className="font-bold text-[var(--text-main)] text-sm uppercase tracking-wider">Notifications</h3>
+                      {isFullUser && friendRequests.length > 0 && (
+                        <span className="bg-[#3B82F6] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          {friendRequests.length} New
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                      {!isFullUser ? (
+                        <div className="p-8 text-center">
+                          <p className="text-sm font-medium text-[var(--text-muted)]">Log in to view notifications</p>
+                        </div>
+                      ) : isLoadingRequests ? (
+                        <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#3B82F6] animate-spin" /></div>
+                      ) : friendRequests.length === 0 ? (
+                        <div className="p-8 text-center">
+                          <p className="text-sm font-medium text-[var(--text-muted)]">No new requests</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-[var(--border-color)]">
+                          {friendRequests.map((req) => (
+                            <div 
+                              key={req.request_id}
+                              onClick={() => {
+                                setIsNotificationsOpen(false);
+                                navigate(`/user/${req.username}`);
+                              }}
+                              className="p-4 hover:bg-[var(--background)] transition-colors cursor-pointer flex flex-col gap-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-[var(--border-color)] overflow-hidden flex-shrink-0">
+                                  {req.avatar_url ? (
+                                    <img src={req.avatar_url} alt={req.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center font-bold text-[var(--text-muted)]">
+                                      {req.name?.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm text-[var(--text-main)] leading-tight">
+                                    <span className="font-bold truncate block">{req.name}</span>
+                                    <span className="text-[var(--text-muted)]">sent you a friend request.</span>
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 ml-13">
+                                <button 
+                                  onClick={(e) => handleAcceptRequest(e, req.username)}
+                                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-[#3B82F6] text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Accept
+                                </button>
+                                <button 
+                                  onClick={(e) => handleRejectRequest(e, req.username)}
+                                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-[var(--card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg text-xs font-bold hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-colors"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Decline
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-[var(--background)] border-t border-[var(--border-color)] flex justify-between items-center">
+                      <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Theme</span>
+                      <ThemeToggle />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {isAuthLoading ? (

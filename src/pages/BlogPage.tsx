@@ -1,41 +1,64 @@
-import { Calendar, Clock, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Clock, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// Mock data: Ready to be replaced by your future API or CMS
-const BLOG_POSTS = [
-  {
-    id: 1,
-    title: "Reclaiming the Lost Art of Spontaneous Dialogue",
-    excerpt: "Why the modern internet feels so lonely, and how removing algorithms and performance metrics can help us actually connect again.",
-    author: "zQuab Team",
-    date: "Jul 28, 2026",
-    readTime: "4 min read",
-    category: "Philosophy",
-    gradient: "from-blue-500 to-cyan-400"
-  },
-  {
-    id: 2,
-    title: "Privacy First: Why We Don't Want Your Data",
-    excerpt: "In a world of data brokers and targeted ads, we chose a different path. A deep dive into the architecture of ephemeral, secure chatting.",
-    author: "zQuab Engineering",
-    date: "Jul 22, 2026",
-    readTime: "6 min read",
-    category: "Engineering",
-    gradient: "from-purple-500 to-pink-500"
-  },
-  {
-    id: 3,
-    title: "How to Have Better Conversations with Strangers",
-    excerpt: "Breaking the ice is hard. Here are 5 psychological tips for turning a random 'hello' into a genuinely memorable conversation.",
-    author: "Community Team",
-    date: "Jul 15, 2026",
-    readTime: "3 min read",
-    category: "Community",
-    gradient: "from-orange-400 to-rose-400"
-  }
-];
+import { blogsApi, type Blog } from '../api/blogs';
+import PaginationLoader from '../components/PaginationLoader';
 
 export default function BlogPage() {
+  const navigate = useNavigate();
+  
+  // 🛠️ Dynamic State
+  const [blogs, setBlogs] = useState<Blog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+
+  const LIMIT = 9; // Multiple of 3 looks best on large screens
+
+  const fetchBlogs = async (reset = false) => {
+    try {
+      if (reset) {
+        setLoading(true);
+        setOffset(0);
+        setHasMore(true);
+      }
+      
+      const currentOffset = reset ? 0 : offset;
+      const results = await blogsApi.getBlogs(LIMIT, currentOffset);
+
+      setBlogs(prev => reset ? results : [...prev, ...results]);
+      if (results.length < LIMIT) setHasMore(false);
+      setOffset(currentOffset + LIMIT);
+    } catch (error) {
+      console.error('Failed to fetch blogs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch on initial mount
+  useEffect(() => {
+    fetchBlogs(true);
+  }, []);
+
+  // 🛠️ Formats RFC3339 to "Jul 28, 2026"
+  const formatDate = (isoString: string | null) => {
+    if (!isoString) return 'Draft';
+    return new Date(isoString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Fallback gradients if a post has no cover image
+  const fallbackGradients = [
+    "from-blue-500 to-cyan-400",
+    "from-purple-500 to-pink-500",
+    "from-orange-400 to-rose-400"
+  ];
+
   return (
     <div className="min-h-[calc(100dvh-64px)] bg-[var(--background)] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto z-10 relative">
@@ -60,55 +83,87 @@ export default function BlogPage() {
         </div>
 
         {/* Blog Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          {BLOG_POSTS.map((post, index) => (
-            <motion.article 
-              key={post.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 + 0.2 }}
-              className="group flex flex-col bg-[var(--card)] border border-[var(--border-color)] rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-[#3B82F6]/5 transition-all duration-300"
-            >
-              {/* Card Image Placeholder (Using gradients to keep it fast and clean) */}
-              <div className={`h-48 w-full bg-gradient-to-br ${post.gradient} p-6 flex flex-col justify-end relative overflow-hidden`}>
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300"></div>
-                <span className="relative z-10 bg-white/20 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full self-start">
-                  {post.category}
-                </span>
-              </div>
-
-              {/* Card Content */}
-              <div className="p-6 flex flex-col flex-1">
-                <h2 className="text-xl font-bold text-[var(--text-main)] mb-3 group-hover:text-[#3B82F6] transition-colors line-clamp-2">
-                  {post.title}
-                </h2>
-                <p className="text-sm text-[var(--text-muted)] mb-6 line-clamp-3 flex-1 leading-relaxed">
-                  {post.excerpt}
-                </p>
-
-                {/* Card Footer */}
-                <div className="mt-auto pt-4 border-t border-[var(--border-color)] flex items-center justify-between text-xs text-[var(--text-muted)] font-medium">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {post.date}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      {post.readTime}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-8">
+          {loading && blogs.length === 0 ? (
+            <div className="col-span-full flex justify-center py-20">
+              <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
+            </div>
+          ) : blogs.length === 0 ? (
+            <div className="col-span-full text-center py-20 text-[var(--text-muted)] bg-[var(--card)] border border-[var(--border-color)] rounded-2xl">
+              <p>No articles published yet. Check back soon!</p>
+            </div>
+          ) : (
+            blogs.map((post, index) => {
+              const gradient = fallbackGradients[index % fallbackGradients.length];
+              
+              return (
+                <motion.article 
+                  key={post.id}
+                  onClick={() => navigate(`/blog/${post.slug}`)}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="group flex flex-col bg-[var(--card)] border border-[var(--border-color)] rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-[#3B82F6]/5 transition-all duration-300 cursor-pointer"
+                >
+                  {/* Card Image */}
+                  <div className={`h-48 w-full bg-gradient-to-br ${!post.coverImage ? gradient : ''} p-6 flex flex-col justify-end relative overflow-hidden bg-[var(--border-color)]`}>
+                    {post.coverImage && (
+                      <img 
+                        src={post.coverImage} 
+                        alt={post.title} 
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-300 z-0"></div>
+                    
+                    {/* Replaced category with generic Article pill */}
+                    <span className="relative z-10 bg-white/20 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full self-start shadow-sm">
+                      Article
                     </span>
                   </div>
-                  
-                  {/* Fake "Read More" button that animates on hover */}
-                  <div className="w-8 h-8 rounded-full bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center group-hover:bg-[#3B82F6] group-hover:text-white group-hover:border-[#3B82F6] transition-all">
-                    <ArrowRight className="w-4 h-4" />
+
+                  {/* Card Content */}
+                  <div className="p-6 flex flex-col flex-1">
+                    <h2 className="text-xl font-bold text-[var(--text-main)] mb-3 group-hover:text-[#3B82F6] transition-colors line-clamp-2">
+                      {post.title}
+                    </h2>
+                    <p className="text-sm text-[var(--text-muted)] mb-6 line-clamp-3 flex-1 leading-relaxed">
+                      {post.excerpt}
+                    </p>
+
+                    {/* Card Footer */}
+                    <div className="mt-auto pt-4 border-t border-[var(--border-color)] flex items-center justify-between text-xs text-[var(--text-muted)] font-medium">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {formatDate(post.publishedAt)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          {post.readingTime} min read
+                        </span>
+                      </div>
+                      
+                      <div className="w-8 h-8 rounded-full bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center group-hover:bg-[#3B82F6] group-hover:text-white group-hover:border-[#3B82F6] transition-all">
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </motion.article>
-          ))}
+                </motion.article>
+              );
+            })
+          )}
         </div>
 
+        {/* Pagination Loader */}
+        {blogs.length > 0 && (
+          <PaginationLoader 
+            onLoadMore={() => fetchBlogs(false)} 
+            hasMore={hasMore} 
+            isLoading={loading} 
+          />
+        )}
+        
       </div>
     </div>
   );

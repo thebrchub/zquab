@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { WebSocketProvider } from './context/WebSocketContext';
 import { RoomsProvider } from './context/RoomsContext';
 import { Loader2 } from 'lucide-react';
+import BlogPost from './pages/BlogPost';
 
 // Route-level code splitting — each page is only fetched when its route is
 // actually visited, instead of every page bundling into the initial load.
@@ -107,6 +108,7 @@ function App() {
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/blog" element={<BlogPage />} />
+                <Route element={<BlogPost />} path="/blog/:slug" />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/safety" element={<Safety />} />

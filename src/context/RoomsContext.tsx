@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { roomsApi } from '../api/rooms';
+import { friendsApi } from '../api/friends'; // 🛠️ ADDED: To fetch friend requests globally
 import { useAuth } from './AuthContext';
 import { useWebSocket } from './WebSocketContext';
 
@@ -30,28 +31,20 @@ interface RoomsContextType {
   usersMap: Record<string, RoomUser>;
   totalUnread: number;
   loading: boolean;
+  
+  // 🛠️ NEW: Exposing Friend Requests globally
+  friendRequests: any[];
+  setFriendRequests: React.Dispatch<React.SetStateAction<any[]>>;
+  
   refreshRooms: () => Promise<void>;
-  // Tell the provider which room is currently open on screen, so live
-  // chat_message events don't bump its badge (it's already being read),
-  // and so it gets marked read the moment it's opened / tab regains focus.
   setActiveRoomId: (roomId: string | null) => void;
-  // Locally patch a room's preview/ordering right after sending a message.
-  // The chat_message WS broadcast deliberately excludes the sending socket
-  // (to avoid echo), so the sender's own tab never receives it back —
-  // without this, the sender's own room list would never move that room to
-  // the top or update its preview for a message it just sent itself.
   bumpOwnMessage: (roomId: string, preview: string) => void;
 }
 
 const RoomsContext = createContext<RoomsContextType | null>(null);
 
-// Shared with HomePage (resume-on-return) and ChatRoom (explicit-close clears
-// it) so both know to use the exact same sessionStorage key.
 export const LAST_ROOM_STORAGE_KEY = 'zquab_last_active_room';
 
-// Single source of truth for the rooms list + aggregate unread count, shared
-// by Navbar and HomePage (and anything else that needs it) instead of each
-// maintaining its own independent copy that can drift out of sync.
 export function RoomsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { lastMessage, sendMessage, isConnected } = useWebSocket();
@@ -61,11 +54,10 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
   const [usersMap, setUsersMap] = useState<Record<string, RoomUser>>({});
   const [loading, setLoading] = useState(true);
   const [activeRoomId, setActiveRoomIdState] = useState<string | null>(null);
+  
+  // 🛠️ NEW: Global State for Friend Requests
+  const [friendRequests, setFriendRequests] = useState<any[]>([]);
 
-  // Remember whichever room is opened so returning to the inbox (e.g. after
-  // navigating to a different page) can resume it. An explicit close (e.g.
-  // ChatRoom's mobile back button) removes this key directly so it doesn't
-  // get resurrected — this effect only ever writes, never clears.
   const setActiveRoomId = useCallback((roomId: string | null) => {
     setActiveRoomIdState(roomId);
     if (roomId) sessionStorage.setItem(LAST_ROOM_STORAGE_KEY, roomId);
@@ -84,24 +76,43 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // 🛠️ NEW: Function to fetch friend requests
+  const refreshFriendRequests = useCallback(async () => {
+    try {
+      const data = await friendsApi.getRequests('received', 10, 0);
+      setFriendRequests(data || []);
+    } catch (err) {
+      console.error('Failed to refresh friend requests:', err);
+    }
+  }, []);
+
+  // Fetch everything on initial load
   useEffect(() => {
     if (!isFullUser) {
       setRooms([]);
       setUsersMap({});
+      setFriendRequests([]); // Clear requests on logout
       setLoading(false);
       return;
     }
     (async () => {
       setLoading(true);
-      await refreshRooms();
+      await Promise.all([refreshRooms(), refreshFriendRequests()]);
       setLoading(false);
     })();
-  }, [isFullUser, refreshRooms]);
+  }, [isFullUser, refreshRooms, refreshFriendRequests]);
 
-  // Live resync via WebSocket data only — no REST call. A new chat_message
-  // patches the matching room's preview/timestamp/unread_count in place and
-  // re-sorts by recency. Skips incrementing unread_count for the room
-  // that's currently open (activeRoomId) since that one's already visible.
+  // 🛠️ NEW: WebSocket Listener for Friend Requests
+  // The API Guide specifically says: "treat the WS event as the source of truth for 'refetch this list now'"
+  useEffect(() => {
+    if (!lastMessage) return;
+    
+    if (['friend_request', 'friend_accepted', 'friend_request_withdrawn'].includes(lastMessage.type)) {
+      refreshFriendRequests();
+    }
+  }, [lastMessage, refreshFriendRequests]);
+
+  // Live resync for chat messages
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'chat_message') return;
 
@@ -117,7 +128,7 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
 
     setRooms(prevRooms => {
       const idx = prevRooms.findIndex(r => r.room_id === msgRoomId);
-      if (idx === -1) return prevRooms; // unknown room — next full load will pick it up
+      if (idx === -1) return prevRooms; 
 
       const updatedRoom = {
         ...prevRooms[idx],
@@ -131,9 +142,7 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [lastMessage, user, activeRoomId]);
 
-  // Presence is otherwise a one-time snapshot from the last /rooms fetch —
-  // patch usersMap live from the same WS events the backend already
-  // broadcasts, instead of leaving "online"/"offline" frozen at fetch time.
+  // Presence updates
   useEffect(() => {
     if (!lastMessage) return;
     if (lastMessage.type !== 'presence_online' && lastMessage.type !== 'presence_offline') return;
@@ -150,11 +159,7 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [lastMessage]);
 
-  // A read receipt is broadcast to every one of the reader's own
-  // connections (not just the tab that sent it — see deliverToRoom in the
-  // chat engine), so this fires in every tab, including the one that never
-  // called markRoomRead itself. Zero the badge there too instead of leaving
-  // it stale until that tab's own refresh/visibility catch-up.
+  // Read receipts
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'read') return;
 
@@ -163,7 +168,7 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
 
     const myId = (user as any)?.user_id || (user as any)?.id;
     const readerId = lastMessage.sender_id || lastMessage.from;
-    if (!readerId || !myId || readerId !== myId) return; // only our own read, not the partner's
+    if (!readerId || !myId || readerId !== myId) return; 
 
     setRooms(prev => {
       const idx = prev.findIndex(r => r.room_id === msgRoomId);
@@ -174,10 +179,6 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [lastMessage, user]);
 
-  // Sends the read receipt + zeroes the local badge, but only while the tab
-  // is actually visible — a backgrounded tab can still receive this room's
-  // WS traffic and re-run this, which would mark messages read that the
-  // user never actually saw.
   const markRoomRead = useCallback((roomId: string) => {
     if (!isConnected || document.visibilityState !== 'visible') return;
     const idx = roomsRef.current.findIndex(r => r.room_id === roomId);
@@ -207,9 +208,6 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Mark the active room read as soon as it's opened, and catch up on
-  // whatever accumulated while the tab was backgrounded once it's visible
-  // again — instead of leaving it stuck unread until reselected.
   useEffect(() => {
     if (!activeRoomId) return;
     markRoomRead(activeRoomId);
@@ -226,8 +224,8 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
   const totalUnread = useMemo(() => rooms.reduce((acc, r) => acc + (r.unread_count || 0), 0), [rooms]);
 
   const value = useMemo(
-    () => ({ rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId, bumpOwnMessage }),
-    [rooms, usersMap, totalUnread, loading, refreshRooms, setActiveRoomId, bumpOwnMessage]
+    () => ({ rooms, usersMap, totalUnread, loading, friendRequests, setFriendRequests, refreshRooms, setActiveRoomId, bumpOwnMessage }),
+    [rooms, usersMap, totalUnread, loading, friendRequests, setFriendRequests, refreshRooms, setActiveRoomId, bumpOwnMessage]
   );
 
   return <RoomsContext.Provider value={value}>{children}</RoomsContext.Provider>;
