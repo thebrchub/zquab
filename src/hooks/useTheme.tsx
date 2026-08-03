@@ -14,9 +14,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
       if (saved) return saved as Theme;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      
+      // Removed the matchMedia check. 
+      // If there is no saved preference, it defaults strictly to 'dark'.
+      return 'dark';
     }
-    return 'light';
+    return 'dark'; // Fallback for server-side rendering
   });
 
   useEffect(() => {
