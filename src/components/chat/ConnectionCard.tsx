@@ -14,6 +14,7 @@ interface Props {
   partnerGender?: string; 
   onAddFriend?: () => void;
   friendRequestStatus?: 'none' | 'loading' | 'sent';
+  isAlreadyFriend?: boolean;
   onLeaveConfirm: () => void;
 }
 
@@ -26,6 +27,7 @@ export default function ConnectionCard({
   partnerGender,
   onAddFriend,
   friendRequestStatus = 'none',
+  isAlreadyFriend = false,
   onLeaveConfirm
 }: Props) {
   const [showConfirm, setShowConfirm] = useState(false);
@@ -103,7 +105,7 @@ export default function ConnectionCard({
               </div>
 
               {/* Dynamic Overlapping Badge */}
-              {friendRequestStatus === 'none' ? (
+              {!isAlreadyFriend && friendRequestStatus === 'none' ? (
                 <button
                   onClick={() => setShowConfirm(true)}
                   className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#3B82F6] hover:bg-blue-600 text-white flex items-center justify-center transition-transform active:scale-95 shadow-md border-[3px] border-[var(--background)]"
@@ -116,7 +118,7 @@ export default function ConnectionCard({
                   <Loader2 className="w-4 h-4 animate-spin text-[#3B82F6]" />
                 </div>
               ) : (
-                <div className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md border-[3px] border-[var(--background)]">
+                <div className={`absolute bottom-0 right-0 w-8 h-8 rounded-full ${isAlreadyFriend ? 'bg-emerald-500' : 'bg-green-500'} text-white flex items-center justify-center shadow-md border-[3px] border-[var(--background)]`}>
                   <Check className="w-4 h-4" />
                 </div>
               )}
@@ -124,7 +126,7 @@ export default function ConnectionCard({
             
             <span className="font-black text-[var(--text-main)] text-xl leading-tight mb-1">@{partnerUsername}</span>
             <span className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-bold">
-              {partnerGender || 'Verified User'}
+              {isAlreadyFriend ? 'Already Friends' : (partnerGender || 'Verified User')}
             </span>
           </div>
         )}

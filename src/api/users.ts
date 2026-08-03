@@ -6,14 +6,13 @@ export const usersApi = {
     return res.data;
   },
   
-  // username is immutable once set, is_private is ignored by backend
-  updateMePartial: async (data: { username?: string; name?: string; mobile?: string; gender?: string; avatar_url?: string; show_last_seen?: boolean; bio?: string }) => {
+  updateMePartial: async (data: { username?: string; name?: string; mobile?: string; gender?: string; avatar_url?: string; show_last_seen?: boolean; bio?: string; country?: string }) => {
     const res = await apiClient.patch('/users/me', data);
     return res.data;
   },
   
   // Requires username and name
-  updateMeFull: async (data: { username: string; name: string; mobile?: string; gender?: string; avatar_url?: string; show_last_seen?: boolean; bio?: string }) => {
+  updateMeFull: async (data: { username: string; name: string; mobile?: string; gender?: string; avatar_url?: string; show_last_seen?: boolean; bio?: string; country?: string }) => {
     const res = await apiClient.put('/users/me', data);
     return res.data;
   },

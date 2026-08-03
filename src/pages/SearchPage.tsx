@@ -9,7 +9,6 @@ interface SearchResult {
   name: string;
   username: string;
   avatar_url: string;
-  is_private: boolean;
   is_online?: boolean;
 }
 

@@ -72,7 +72,7 @@ export default function ContactPage() {
                </div>
                <div>
                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Prefer Email?</p>
-                 <p className="text-sm font-bold text-[var(--text-main)]">hello@zquab.com</p>
+                 <p className="text-sm font-bold text-[var(--text-main)]">info@zquab.com</p>
                </div>
             </div>
           </motion.div>

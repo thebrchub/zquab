@@ -9,7 +9,6 @@ export interface RoomUser {
   name: string;
   avatar_url?: string;
   last_seen_at?: string;
-  is_private?: boolean;
   is_online?: boolean;
 }
 

@@ -8,7 +8,7 @@ type ChatCallbackOptions = {
   onStatusChange: (status: Status) => void;
   onIncomingMessage: (message: ChatMessage) => void;
   onSystemMessage: (text: string) => void;
-  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string, partnerUsername?: string) => void;
+  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string, partnerUsername?: string, isFriend?: boolean) => void;
   onDisconnected: (reason: string) => void;
   onSocketOpen?: () => void;
   onSocketClose?: (code: number, reason: string) => void;
@@ -184,8 +184,9 @@ export class ChatClient {
             const partnerId = match.partnerId as string;
             const partnerLocation = match.partnerLocation as string | undefined;
             const partnerUsername = match.partnerUsername as string | undefined;
+            const isFriend = Boolean((match as any).isFriend ?? (match as any).is_friend ?? false);
             this.currentRoomId = roomId;
-            this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername);
+            this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername, isFriend);
             this.callbacks.onStatusChange('connected');
             this.callbacks.onSystemMessage('Match found! Say hello.');
             break;
@@ -331,7 +332,19 @@ export class ChatClient {
   }
 
   async enterMatch() {
-    await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
+    const response = await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
+    const matchedRoomId = typeof (response as any)?.room_id === 'string' ? (response as any).room_id : null;
+    const matchedPartnerUsername = typeof (response as any)?.partner_username === 'string' ? (response as any).partner_username : undefined;
+    const matchedPartnerLocation = typeof (response as any)?.partner_location === 'string' ? (response as any).partner_location : undefined;
+    const matchedIsFriend = Boolean((response as any)?.is_friend ?? (response as any)?.isFriend ?? false);
+
+    if (matchedRoomId) {
+      this.currentRoomId = matchedRoomId;
+      this.callbacks.onMatchFound(matchedRoomId, '', matchedPartnerLocation, matchedPartnerUsername, matchedIsFriend);
+      this.callbacks.onStatusChange('connected');
+      this.callbacks.onSystemMessage('Match found! Say hello.');
+      return;
+    }
 
     // A match_found event may have already arrived over the WebSocket while
     // this request was in flight. Don't clobber the resulting 'connected'

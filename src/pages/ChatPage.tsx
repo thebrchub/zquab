@@ -75,6 +75,7 @@ export default function ChatPage() {
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
   const [partnerUsername, setPartnerUsername] = useState<string | undefined>(undefined);
+  const [isMatchWithFriend, setIsMatchWithFriend] = useState(false);
   const [partnerGender, setPartnerGender] = useState<string | undefined>(undefined);
   const [friendRequestSent, setFriendRequestSent] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
@@ -156,8 +157,9 @@ export default function ChatPage() {
         console.log('[Chat System]:', text);
         setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]);
       },
-      onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername) => {
+      onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername, isFriend) => {
         setPartnerUsername(partnerUsername);
+        setIsMatchWithFriend(Boolean(isFriend));
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -294,6 +296,7 @@ export default function ChatPage() {
     setIncomingPhotoRequest(false);
     setPhotoRequestBusy(false);
     setIsPartnerTyping(false);
+    setIsMatchWithFriend(false);
     clearPhotoRequestTimeout();
   };
 
@@ -453,6 +456,7 @@ export default function ChatPage() {
                   partnerGender={partnerGender}
                   onAddFriend={handleAddFriend}
                   friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
+                  isAlreadyFriend={isMatchWithFriend}
                   onLeaveConfirm={() => setShowLeaveConfirm(true)} 
                 />
               </div>
@@ -625,6 +629,7 @@ export default function ChatPage() {
           partnerGender={partnerGender}
           onAddFriend={handleAddFriend}
           friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
+          isAlreadyFriend={isMatchWithFriend}
           onLeaveConfirm={() => setShowLeaveConfirm(true)} 
         />
       </div>

@@ -73,7 +73,9 @@ export default function UserProfile() {
       const room = await roomsApi.createRoom(username);
       navigate(`/home?room=${room.room_id}`, { state: { activeRoomId: room.room_id } });
     } catch (err: any) {
-      alert(err.message || 'Failed to start conversation');
+      const message = err?.message || 'Failed to start conversation';
+      alert(message.includes('friends') ? 'You can only message friends. Send a friend request first.' : message);
+    } finally {
       setActionLoading(false);
     }
   };

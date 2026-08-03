@@ -31,7 +31,7 @@ export default function Profile() {
   const [bio, setBio] = useState('');
   const [gender, setGender] = useState('Any');
   const [age, setAge] = useState(''); 
-  const [country, setCountry] = useState('India'); 
+  const [country, setCountry] = useState(''); 
   const [hasExistingUsername, setHasExistingUsername] = useState(false);
 
   // --------------------------------------------------------
@@ -61,6 +61,8 @@ export default function Profile() {
         setUsername(data.username || '');
         setBio(data.bio || '');
         setGender(data.gender || 'Any');
+        setAge(data.age || '');
+        setCountry(data.country || '');
         if (data.username) setHasExistingUsername(true);
       } catch (err: any) {
         setError(err.message || 'Failed to load profile');
@@ -128,11 +130,12 @@ export default function Profile() {
     setSaving(true);
     setError(null);
     try {
-      const payload: any = { bio, gender };
+      const payload: any = { bio, gender, country };
       if (!hasExistingUsername && username) payload.username = username;
       
       const updated = await usersApi.updateMePartial(payload);
       setProfile({ ...updated, age, country }); 
+      setCountry(country);
       if (updated.username) setHasExistingUsername(true);
       
       setIsEditing(false); 
@@ -235,6 +238,7 @@ export default function Profile() {
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-[var(--text-main)]">Country</label>
                   <select value={country} onChange={(e) => setCountry(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] outline-none focus:border-[#3B82F6]">
+                    <option value="">Select country</option>
                     <option value="India">🇮🇳 India</option>
                     <option value="United States">🇺🇸 United States</option>
                     <option value="United Kingdom">🇬🇧 United Kingdom</option>
@@ -274,7 +278,7 @@ export default function Profile() {
 
               {/* Badges wrapped nicely */}
               <div className="flex flex-wrap justify-center gap-2 mb-6">
-                <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><MapPin className="w-3.5 h-3.5" /> {country}</span>
+                {country && <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><MapPin className="w-3.5 h-3.5" /> {country}</span>}
                 {gender !== 'Any' && <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><Activity className="w-3.5 h-3.5" /> {gender}</span>}
                 {age && <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><Calendar className="w-3.5 h-3.5" /> {age}</span>}
               </div>
