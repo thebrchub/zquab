@@ -138,7 +138,7 @@ export default function ChatInput({
                 setShowEmoji(false); 
               }
             }}
-            disabled={disabled}
+            disabled={disabled || photoRequestDisabled}
             className={`p-2 sm:p-2.5 rounded-full transition-colors flex-shrink-0 mb-0.5 ${
               showDrawer 
                 ? 'bg-[#3B82F6] text-white' 

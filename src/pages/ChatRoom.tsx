@@ -5,11 +5,59 @@ import { useWebSocket } from '../context/WebSocketContext';
 import { LAST_ROOM_STORAGE_KEY, useRooms } from '../context/RoomsContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
-import { Loader2, ArrowLeft, MoreVertical, User, X } from 'lucide-react';
+import { Loader2, ArrowLeft, MoreVertical, User, X, Image as ImageIcon, Check } from 'lucide-react';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
+
+const compressImageToWebP = (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.src = URL.createObjectURL(file);
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+
+      const MAX_SIZE = 1200;
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        if (width > height) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        } else {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject('Canvas context not supported');
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const newName = file.name.replace(/\.[^/.]+$/, '') + '.webp';
+            const webpFile = new File([blob], newName, { type: 'image/webp' });
+            resolve(webpFile);
+          } else {
+            reject('Blob creation failed');
+          }
+        },
+        'image/webp',
+        0.8
+      );
+    };
+
+    img.onerror = () => reject('Image load failed');
+  });
+};
 
 export default function ChatRoom({ 
   inlineRoomId, 
@@ -51,6 +99,9 @@ export default function ChatRoom({
 
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
+  const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
+  const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
+  const photoRequestTimeoutRef = useRef<number | null>(null);
 
   const [showSidebar, setShowSidebar] = useState(false); 
 
@@ -67,6 +118,56 @@ export default function ChatRoom({
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const handleImageClick = useCallback((url: string) => setViewingImage(url), []);
+
+  const clearPhotoRequestTimeout = useCallback(() => {
+    if (photoRequestTimeoutRef.current !== null) {
+      window.clearTimeout(photoRequestTimeoutRef.current);
+      photoRequestTimeoutRef.current = null;
+    }
+  }, []);
+
+  const sharePhoto = useCallback(async (file: File) => {
+    if (!roomId) throw new Error('No room selected');
+
+    const respondResponse = await fetch(`${API_BASE}/api/v1/match/photo/respond`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: roomId, accept: true, content_type: file.type }),
+    });
+
+    if (!respondResponse.ok) {
+      const text = await respondResponse.text();
+      throw new Error(text || 'Unable to accept photo request');
+    }
+
+    const respondData = await respondResponse.json().catch(() => null) as { url?: string; object_key?: string } | null;
+    if (!respondData?.url || !respondData.object_key) {
+      throw new Error('No upload URL received');
+    }
+
+    const uploadResponse = await fetch(respondData.url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error('Photo upload failed');
+    }
+
+    const uploadedResponse = await fetch(`${API_BASE}/api/v1/match/photo/uploaded`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: roomId, object_key: respondData.object_key }),
+    });
+
+    if (!uploadedResponse.ok) {
+      const text = await uploadedResponse.text();
+      throw new Error(text || 'Photo confirmation failed');
+    }
+  }, [roomId]);
 
   // 🛠️ FETCH HISTORY & MERGE OPTIMISTIC MESSAGES
   useEffect(() => {
@@ -158,6 +259,28 @@ export default function ChatRoom({
     if (!roomId) return;
 
     if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
+      if (lastMessage.type === 'photo_request') {
+        setIncomingPhotoRequest(true);
+        setMessages(prev => [...prev, { id: `sys-pr-${Date.now()}`, content: 'Your friend wants to see a photo of you.', isSystem: true, isOwn: false }]);
+        return;
+      }
+
+      if (lastMessage.type === 'photo_response') {
+        clearPhotoRequestTimeout();
+        setPhotoRequestBusy(false);
+        const accepted = typeof lastMessage.accepted === 'boolean' ? lastMessage.accepted : Boolean(lastMessage.payload?.accepted);
+        setMessages(prev => [...prev, { id: `sys-prr-${Date.now()}`, content: accepted ? 'Your friend accepted — you can send the photo now.' : 'Your friend declined the photo request.', isSystem: true, isOwn: false }]);
+        return;
+      }
+
+      if (lastMessage.type === 'photo_ready') {
+        const photoUrl = lastMessage.payload?.url || lastMessage.url || '';
+        if (photoUrl) {
+          setMessages(prev => [...prev, { id: `msg-photo-${Date.now()}`, content: '', isOwn: false, imageUrl: photoUrl }]);
+        }
+        return;
+      }
+
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered') {
         if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
           sentMessageIdsRef.current.delete(lastMessage.id);
@@ -217,7 +340,7 @@ export default function ChatRoom({
         }
       }
     }
-  }, [lastMessage, roomId, isDevMode, user, isConnected, sendMessage]);
+  }, [lastMessage, roomId, isDevMode, user, isConnected, sendMessage, clearPhotoRequestTimeout]);
 
   useEffect(() => {
     if (isDevMode) return;
@@ -318,7 +441,52 @@ export default function ChatRoom({
     }, 100);
   };
 
-  const handleRequestAttachment = () => {
+  const handleRequestPhoto = async () => {
+    if (!roomId || isDevMode) return;
+
+    setPhotoRequestBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/match/photo/request`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: roomId }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Unable to request photo');
+      }
+
+      clearPhotoRequestTimeout();
+      photoRequestTimeoutRef.current = window.setTimeout(() => {
+        clearPhotoRequestTimeout();
+        setPhotoRequestBusy(false);
+        setMessages(prev => [...prev, { id: `sys-pr-timeout-${Date.now()}`, content: 'Your friend did not respond to the photo request.', isSystem: true, isOwn: false }]);
+      }, 30_000);
+    } catch (error) {
+      setPhotoRequestBusy(false);
+      setMessages(prev => [...prev, { id: `sys-pr-error-${Date.now()}`, content: error instanceof Error ? error.message : 'Unable to request photo.', isSystem: true, isOwn: false }]);
+    }
+  };
+
+  const handleDeclinePhotoRequest = async () => {
+    if (!roomId) return;
+    setIncomingPhotoRequest(false);
+    try {
+      await fetch(`${API_BASE}/api/v1/match/photo/respond`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: roomId, accept: false }),
+      });
+    } catch {
+      // ignore network errors and keep the UI consistent
+    }
+  };
+
+  const handleAcceptPhotoRequest = () => {
+    setIncomingPhotoRequest(false);
     photoFileInputRef.current?.click();
   };
 
@@ -329,22 +497,32 @@ export default function ChatRoom({
 
     const localPreviewUrl = URL.createObjectURL(file);
     const tempId = `msg-img-${Date.now()}`;
-    
+
     const optimisticMsg = {
       id: tempId,
       content: '',
       created_at: new Date().toISOString(),
       isOwn: true,
       status: 'sent',
-      imageUrl: localPreviewUrl
+      imageUrl: localPreviewUrl,
+      isUploading: true,
     };
 
     setMessages((prev) => [...prev, optimisticMsg as any]);
-    
+
     const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
     sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
 
     if (roomId) bumpOwnMessage(roomId, '📷 Photo');
+
+    try {
+      const webpFile = await compressImageToWebP(file);
+      await sharePhoto(webpFile);
+      setMessages((prev) => prev.map((msg) => msg.id === tempId ? { ...msg, isUploading: false } : msg));
+    } catch (error) {
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+      setMessages((prev) => [...prev, { id: `sys-pr-error-${Date.now()}`, content: error instanceof Error ? error.message : 'Failed to send photo.', isSystem: true, isOwn: false }]);
+    }
 
     setTimeout(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -494,12 +672,36 @@ export default function ChatRoom({
         )}
       </div>
 
-      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10 w-full min-w-0">
+      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10 w-full min-w-0 relative">
+        <AnimatePresence>
+          {incomingPhotoRequest && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-2xl border border-[var(--border-color)] bg-[var(--card)]/95 p-4 shadow-2xl backdrop-blur-md z-30"
+            >
+              <p className="text-sm font-medium text-[var(--text-main)] mb-3 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#3B82F6]" /> Your friend wants to see a photo of you.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={handleDeclinePhotoRequest} className="flex items-center justify-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--background)] py-2.5 font-medium text-[var(--text-muted)] transition-all hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30">
+                  <X className="w-4 h-4" /> Decline
+                </button>
+                <button onClick={handleAcceptPhotoRequest} className="flex items-center justify-center gap-2 rounded-xl bg-[#3B82F6] py-2.5 font-medium text-white transition-all hover:bg-blue-600">
+                  <Check className="w-4 h-4" /> Accept
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <ChatInput 
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
           onTyping={handleTyping}
-          onDirectImageClick={handleRequestAttachment}
+          onDirectImageClick={handleRequestPhoto}
+          photoRequestDisabled={photoRequestBusy}
         />
       </div>
       
