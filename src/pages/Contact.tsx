@@ -1,22 +1,48 @@
 import { useState } from 'react';
-import { MessageSquarePlus, Send, CheckCircle2, Mail, Sparkles, Link as LinkIcon } from 'lucide-react';
+import { MessageSquarePlus, Send, CheckCircle2, Mail, Sparkles, Link as LinkIcon, Loader2, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import {
+  categoryToTopic,
+  nameFromEmail,
+  sendContactEmail,
+  type ContactCategory,
+} from '../api/email';
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
-  const [category, setCategory] = useState<'feedback' | 'feature' | 'issue'>('feedback');
+  const [category, setCategory] = useState<ContactCategory>('feedback');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
-  const [socialHandle, setSocialHandle] = useState(''); // 🛠️ NEW: State for social profile
+  const [socialHandle, setSocialHandle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || !email.trim()) return;
-    
-    // Handle submission logic here (e.g., fetch to your backend)
-    console.log({ category, message, email, socialHandle });
-    
-    setSubmitted(true);
+    if (!message.trim() || !email.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await sendContactEmail({
+        name: nameFromEmail(email),
+        email: email.trim(),
+        message: message.trim(),
+        topic: categoryToTopic(category),
+        social_profile: socialHandle.trim() || undefined,
+      });
+
+      setSubmitted(true);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Failed to send message. Please try again.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,11 +96,12 @@ export default function ContactPage() {
                   Thank you for helping us improve zQuab. If your feature makes the cut, we'll be in touch!
                 </p>
                 <button
-                  onClick={() => { 
-                    setSubmitted(false); 
-                    setMessage(''); 
-                    setEmail(''); 
-                    setSocialHandle(''); 
+                  onClick={() => {
+                    setSubmitted(false);
+                    setMessage('');
+                    setEmail('');
+                    setSocialHandle('');
+                    setError(null);
                   }}
                   className="px-8 py-4 rounded-full bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] font-bold text-base hover:border-[#3B82F6] transition-colors active:scale-95 shadow-sm"
                 >
@@ -98,7 +125,7 @@ export default function ContactPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setCategory(item.id as any)}
+                        onClick={() => setCategory(item.id as ContactCategory)}
                         className={`py-3.5 px-4 rounded-2xl text-sm font-bold transition-all border ${
                           category === item.id 
                             ? 'bg-[#3B82F6] text-white border-[#3B82F6] shadow-lg shadow-blue-500/20' 
@@ -180,15 +207,29 @@ export default function ContactPage() {
                   </div>
                 </div>
 
+                {error && (
+                  <div className="flex items-start gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <p>{error}</p>
+                  </div>
+                )}
+
                 {/* Submit Button */}
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="group flex w-full sm:inline-flex items-center justify-center gap-3 bg-[#3B82F6] hover:bg-blue-600 text-white px-8 py-4 rounded-full font-bold text-base transition-all duration-300 hover:scale-[1.02] active:scale-95 shadow-xl shadow-blue-500/20"
+                    disabled={isSubmitting}
+                    className="group flex w-full sm:inline-flex items-center justify-center gap-3 bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 disabled:hover:bg-[#3B82F6] disabled:hover:scale-100 text-white px-8 py-4 rounded-full font-bold text-base transition-all duration-300 hover:scale-[1.02] active:scale-95 shadow-xl shadow-blue-500/20"
                   >
-                    <MessageSquarePlus className="w-5 h-5" />
-                    Submit Feedback
-                    <Send className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    {isSubmitting ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <MessageSquarePlus className="w-5 h-5" />
+                    )}
+                    {isSubmitting ? 'Sending...' : 'Submit Feedback'}
+                    {!isSubmitting && (
+                      <Send className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    )}
                   </button>
                 </div>
 
