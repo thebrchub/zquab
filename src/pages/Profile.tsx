@@ -16,7 +16,7 @@ type Tab = 'friends' | 'requests' | 'search' | 'blocked';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user: authUser } = useAuth(); 
+  const { user: authUser, logout: logoutUser } = useAuth(); 
   
   // --------------------------------------------------------
   // 1. PROFILE STATE
@@ -145,10 +145,10 @@ export default function Profile() {
 
   const handleLogout = async () => {
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-      await fetch(`${baseUrl}/auth/logout`, { method: 'POST', credentials: 'include' });
-      window.location.href = '/';
+      await logoutUser();
+      navigate('/');
     } catch (err) {
+      console.error('Logout failed:', err);
       window.location.href = '/';
     }
   };
