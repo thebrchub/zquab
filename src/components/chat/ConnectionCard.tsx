@@ -124,7 +124,16 @@ export default function ConnectionCard({
               )}
             </div>
             
-            <span className="font-black text-[var(--text-main)] text-xl leading-tight mb-1">@{partnerUsername}</span>
+            {/* 🛠️ FIX: Made the username a clickable link that opens in a new tab */}
+            <a 
+              href={`/user/${partnerUsername}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-black text-[var(--text-main)] hover:text-[#3B82F6] hover:underline transition-colors text-xl leading-tight mb-1"
+              title={`View @${partnerUsername}'s profile in a new tab`}
+            >
+              @{partnerUsername}
+            </a>
             <span className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-bold">
               {isAlreadyFriend ? 'Already Friends' : (partnerGender || 'Verified User')}
             </span>
