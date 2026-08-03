@@ -7,6 +7,7 @@ message MatchFound {
     string partner_avatar   = 3;
     string partner_location = 4;
     string partner_username = 5;
+    bool   is_friend        = 6; // Indicates whether the matched stranger is already a friend
 }
 
 message StrangerDisconnected {
