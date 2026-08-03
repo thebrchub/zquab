@@ -15,27 +15,55 @@
     <title>zQuab</title>
     <meta name="title" content="Meet someone new in seconds.">
     <meta name="description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations.">
-    <meta name="theme-color" content="#09090B" />
+    <meta name="theme-color" content="#09090B"Here is the fully updated and optimized `index.html`. 
 
-    <!-- TEMPORARY: Block Search Engine Indexing -->
-    <meta name="robots" content="noindex, nofollow">
-    <meta name="googlebot" content="noindex, nofollow">
+I have cleaned up the structure, combined the title and tagline for better standard SEO practices, added a canonical link, and included standard Apple Touch / PWA meta tags to make it production-ready.
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- Primary Meta Tags -->
+    <title>zQuab — Meet someone new in seconds.</title>
+    <meta name="title" content="zQuab — Meet someone new in seconds." />
+    <meta name="description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations." />
+    <meta name="theme-color" content="#09090B" />
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="[https://www.zquab.com/](https://www.zquab.com/)" />
+
+    <!-- Favicon & App Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" /> <!-- Add a 180x180 PNG in your public folder -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="[https://fonts.googleapis.com](https://fonts.googleapis.com)" />
+    <link rel="preconnect" href="[https://fonts.gstatic.com](https://fonts.gstatic.com)" crossorigin />
+    <link href="[https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap](https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap)" rel="stylesheet" />
+
+    <!-- TEMPORARY: Block Search Engine Indexing (Remove before launch!) -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
 
     <!-- Open Graph / Facebook / Discord / WhatsApp -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.zquab.com/">
-    <meta property="og:title" content="Meet someone new in seconds.">
-    <meta property="og:description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations.">
-    <!-- Updated OG Image Path -->
-    <meta property="og:image" content="https://www.zquab.com/og-image.jpg">
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="[https://www.zquab.com/](https://www.zquab.com/)" />
+    <meta property="og:title" content="zQuab — Meet someone new in seconds." />
+    <meta property="og:description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations." />
+    <meta property="og:image" content="[https://www.zquab.com/og-image.jpg](https://www.zquab.com/og-image.jpg)" />
+    <meta property="og:site_name" content="zQuab" />
 
     <!-- Twitter / X -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://www.zquab.com/">
-    <meta property="twitter:title" content="Meet someone new in seconds.">
-    <meta property="twitter:description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations.">
-    <!-- Updated Twitter Image Path -->
-    <meta property="twitter:image" content="https://www.zquab.com/og-image.jpg">
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="[https://www.zquab.com/](https://www.zquab.com/)" />
+    <meta property="twitter:title" content="zQuab — Meet someone new in seconds." />
+    <meta property="twitter:description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations." />
+    <meta property="twitter:image" content="[https://www.zquab.com/og-image.jpg](https://www.zquab.com/og-image.jpg)" />
   </head>
   <body>
     <div id="root"></div>
