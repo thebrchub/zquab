@@ -134,7 +134,7 @@ export default function Navbar() {
                 <Info className="w-5 h-5" /> About
               </Link>
               <Link to="/blog" className="flex items-center gap-2.5 text-base text-[var(--text-muted)] hover:text-[#3B82F6] font-bold transition-colors py-2">
-                <BookOpen className="w-5 h-5" /> Blog
+                <BookOpen className="w-5 h-5" /> Blogs
               </Link>
 
               <div className="h-8 w-px bg-[var(--border-color)] mx-1"></div>

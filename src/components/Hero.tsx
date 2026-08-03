@@ -86,9 +86,17 @@ export default function Hero() {
                   {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                 </button>
 
-                <button className="flex items-center justify-center gap-2 bg-[var(--card)]/80 backdrop-blur-sm hover:bg-[var(--card)] text-[var(--text-main)] border border-[var(--border-color)] px-8 py-4 rounded-full font-semibold text-lg transition-all duration-200 active:scale-[0.98]">
-                  View Features
-                </button>
+               <button 
+  onClick={() => {
+    const element = document.getElementById('features');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  }}
+  className="flex items-center justify-center gap-2 bg-[var(--card)]/80 backdrop-blur-sm hover:bg-[var(--card)] text-[var(--text-main)] border border-[var(--border-color)] px-8 py-4 rounded-full font-semibold text-lg transition-all duration-200 active:scale-[0.98]"
+>
+  View Features
+</button>
               </div>
             </motion.div>
 

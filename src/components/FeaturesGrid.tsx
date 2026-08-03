@@ -69,7 +69,7 @@ export default function FeaturesGrid() {
   }, []);
 
   return (
-    <section className="py-24 relative w-full bg-[var(--background)] z-20 -mb-[2px] border-none">
+    <section id="features" className="py-24 relative w-full bg-[var(--background)] z-20 -mb-[2px] border-none">
       <div className="mx-4 md:mx-8 lg:mx-12">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-[var(--text-main)]">

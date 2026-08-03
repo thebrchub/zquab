@@ -3,7 +3,7 @@ import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
 import TypingIndicator from '../components/chat/TypingIndicator';
-import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, HeartHandshake, ImageMinus, UserX, ShieldAlert } from 'lucide-react';
+import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
@@ -490,35 +490,139 @@ export default function ChatPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showRulesModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <motion.div initial={{ scale: 0.95, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, y: 20, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-lg border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]">
-              <h3 className="text-3xl font-bold text-[var(--text-main)] mb-2 text-center tracking-tight">Community Rules</h3>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar mt-4">
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <HeartHandshake className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
-                  <p className="text-sm text-[var(--text-muted)]">No bullying, racism, harassment, or abusive language.</p>
-                </div>
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <ImageMinus className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
-                  <p className="text-sm text-[var(--text-muted)]">You cannot send photos directly. The stranger must request it first.</p>
-                </div>
-                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)] flex gap-4 items-start">
-                  <UserX className="w-5 h-5 text-[#3B82F6] flex-shrink-0" />
-                  <p className="text-sm text-[var(--text-muted)]">Do not share sensitive personal details or contact information.</p>
-                </div>
-              </div>
-              <label onClick={() => setRulesAgreed(!rulesAgreed)} className="flex items-center gap-3 cursor-pointer mb-6 group">
-                <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${rulesAgreed ? 'bg-[#3B82F6] border-[#3B82F6]' : 'border-[var(--text-muted)]'}`}>
-                  {rulesAgreed && <Check className="w-4 h-4 text-white" />}
-                </div>
-                <span className="text-sm text-[var(--text-muted)] select-none">I agree to the Community Rules.</span>
-              </label>
-              <button onClick={handleAcceptRules} disabled={!rulesAgreed} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold disabled:opacity-50">I Understand & Agree</button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+  {showRulesModal && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.95, y: 20, opacity: 0 }}
+        className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-xl border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]"
+      >
+        <h3 className="text-3xl font-bold text-[var(--text-main)] text-center tracking-tight">
+          Community Guidelines
+        </h3>
+
+        <p className="text-sm text-[var(--text-muted)] text-center mt-3 mb-6 leading-relaxed">
+          Welcome to <strong>zQuab</strong>. Our goal is to help people have
+          genuine conversations in a respectful environment. Please read these
+          guidelines before starting your first chat.
+        </p>
+
+        <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
+
+          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+            <h4 className="font-semibold text-[var(--text-main)] mb-2">
+              Be Respectful
+            </h4>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              Treat everyone with respect. Harassment, bullying, hate speech,
+              discrimination, threats, or intentionally abusive behavior are
+              not allowed.
+            </p>
+          </div>
+
+          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+            <h4 className="font-semibold text-[var(--text-main)] mb-2">
+              Protect Your Privacy
+            </h4>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              Never share sensitive personal information such as your address,
+              passwords, financial information, government IDs, or anything
+              that could put you or someone else at risk.
+            </p>
+          </div>
+
+          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+            <h4 className="font-semibold text-[var(--text-main)] mb-2">
+              Image Sharing
+            </h4>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              Photos cannot be sent directly. The other person must explicitly
+              request an image before one can be shared. Never pressure anyone
+              into sharing photos.
+            </p>
+          </div>
+
+          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+            <h4 className="font-semibold text-[var(--text-main)] mb-2">
+              Illegal or Harmful Content
+            </h4>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              Do not use zQuab to promote illegal activities, exploit others,
+              distribute malicious content, engage in scams, impersonation,
+              fraud, or any activity that violates applicable laws.
+            </p>
+          </div>
+
+          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+            <h4 className="font-semibold text-[var(--text-main)] mb-2">
+              Anonymous, Not Unaccountable
+            </h4>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              zQuab is built for anonymous conversations, but violating these
+              guidelines may result in connection termination, temporary
+              restrictions, or permanent account action where applicable.
+            </p>
+          </div>
+
+          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+            <h4 className="font-semibold text-[var(--text-main)] mb-2">
+              Your Responsibility
+            </h4>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              You are responsible for your own conversations and the
+              information you choose to share. If someone makes you
+              uncomfortable, leave the conversation immediately.
+            </p>
+          </div>
+
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+              By continuing, you confirm that you have read these Community
+              Guidelines and agree to follow them while using zQuab. You also
+              acknowledge that zQuab is intended for users who are at least
+              <strong> 18 years of age</strong>.
+            </p>
+          </div>
+
+        </div>
+
+        <label
+          onClick={() => setRulesAgreed(!rulesAgreed)}
+          className="flex items-center gap-3 cursor-pointer mb-6 group"
+        >
+          <div
+            className={`w-6 h-6 rounded-md border flex items-center justify-center ${
+              rulesAgreed
+                ? "bg-[#3B82F6] border-[#3B82F6]"
+                : "border-[var(--text-muted)]"
+            }`}
+          >
+            {rulesAgreed && <Check className="w-4 h-4 text-white" />}
+          </div>
+
+          <span className="text-sm text-[var(--text-muted)] select-none">
+            I have read and agree to follow the Community Guidelines and Terms
+            of Service.
+          </span>
+        </label>
+
+        <button
+          onClick={handleAcceptRules}
+          disabled={!rulesAgreed}
+          className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold disabled:opacity-50 transition-opacity"
+        >
+          I Understand & Agree
+        </button>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
 
       <AnimatePresence>
         {showLoginPrompt && (

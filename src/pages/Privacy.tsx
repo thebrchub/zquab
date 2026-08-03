@@ -177,7 +177,7 @@ export default function Privacy() {
           <h2 className="text-xl font-bold mb-4">10. Children's Privacy</h2>
           <div className="text-[var(--text-muted)] space-y-4">
             <p>
-              zQuab is strictly not intended for children. You must be at least 13 years of age (or 16 depending on your jurisdiction) to use our platform. If we become aware that a child under the required age has provided personal information, we will take steps to delete such information immediately.
+              zQuab is strictly not intended for children. You must be at least 18 years of age to use our platform. If we become aware that a child under the required age has provided personal information, we will take steps to delete such information immediately.
             </p>
           </div>
         </section>

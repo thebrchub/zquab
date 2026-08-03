@@ -63,7 +63,7 @@ export default function AboutPage() {
   };
 
   return (
-    <main className="min-h-[100dvh] pt-20 pb-24 relative w-full bg-[var(--background)] z-20 font-sans">
+    <main className="min-h-[100dvh] pt-10 pb-24 relative w-full bg-[var(--background)] z-20 font-sans">
       <div className="w-full max-w-[1400px] mx-auto px-4 md:px-8 lg:px-12">
         
         {/* --- HERO SECTION --- */}
