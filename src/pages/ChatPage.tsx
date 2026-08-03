@@ -581,7 +581,7 @@ export default function ChatPage() {
             </p>
           </div>
 
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+          <div className=" rounded-xl p-4">
             <p className="text-sm text-[var(--text-muted)] leading-relaxed">
               By continuing, you confirm that you have read these Community
               Guidelines and agree to follow them while using zQuab. You also
