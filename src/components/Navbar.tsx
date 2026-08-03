@@ -110,7 +110,7 @@ export default function Navbar() {
   return (
     <nav
       style={{ borderBottomColor: 'var(--border-color)' }}
-      className={`sticky top-0 z-50 glass border-b transition-transform duration-300 ease-in-out ${
+      className={`sticky top-0 z-50 bg-[var(--background)]/30 backdrop-blur-md border-b border-[var(--border-color)]/50 transition-transform duration-300 ease-in-out ${
       isVisible ? 'translate-y-0' : '-translate-y-full'
     }`}>
       <div className="w-full px-4 md:px-8 lg:px-12 xl:px-16 relative">
