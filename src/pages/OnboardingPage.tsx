@@ -1,15 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, AlertCircle, Loader2, ChevronDown, Check, MapPin, Lock } from 'lucide-react'; // 🛠️ Added Lock icon
+import { AlertCircle, Loader2, ChevronDown, Check, MapPin, Lock, User, RefreshCw } from 'lucide-react'; // 🛠️ Added RefreshCw icon
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '../api/client'; 
 import { useAuth } from '../context/AuthContext'; 
-import { ALL_COUNTRIES } from '../constants/countries';
+import { ALL_COUNTRIES } from '../constants/countries'; 
+
+import { createAvatar } from '@dicebear/core';
+import { lorelei } from '@dicebear/collection';
 
 const GENDER_OPTIONS = ['Prefer not to say', 'Male', 'Female', 'Other'];
-
-// 🛠️ The complete, lightweight static list of all countries (No heavy npm libraries needed!)
-
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
@@ -22,12 +22,28 @@ export default function OnboardingPage() {
   const [bio, setBio] = useState('');
   
   const [country, setCountry] = useState('Detecting...'); 
-  const [isCountryLocked, setIsCountryLocked] = useState(false); // 🛠️ NEW: Controls if country is changeable
+  const [isCountryLocked, setIsCountryLocked] = useState(false); 
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 🛠️ Fetch Country on mount
+  const [zAvatarRequested, setZAvatarRequested] = useState(false);
+  
+  // 🛠️ NEW: State to track rerolls
+  const [avatarVariant, setAvatarVariant] = useState(0);
+
+  // 🛠️ UPDATED: Live zAvatar Preview Generation (Includes the variant number!)
+  const avatarPreview = useMemo(() => {
+    if (!username || gender === 'Prefer not to say' || !zAvatarRequested) return null;
+    
+    // 🛠️ FIX: Removed ${gender} from the seed so it's purely based on the variant!
+    return createAvatar(lorelei, {
+      seed: `${username}-${avatarVariant}`,
+      size: 128,
+      backgroundColor: ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
+    }).toDataUri();
+  }, [username, gender, zAvatarRequested, avatarVariant]);
+
   useEffect(() => {
     const fetchCountry = async () => {
       try {
@@ -35,10 +51,10 @@ export default function OnboardingPage() {
         const data = await res.json();
         if (data.country) {
           setCountry(data.country);
-          setIsCountryLocked(true); // Lock it down!
+          setIsCountryLocked(true); 
         } else {
           setCountry('');
-          setIsCountryLocked(false); // Let them choose manually
+          setIsCountryLocked(false); 
         }
       } catch (err) {
         console.warn("IP Geolocation failed, falling back to manual selection.", err);
@@ -49,7 +65,6 @@ export default function OnboardingPage() {
     fetchCountry();
   }, []);
 
-  // Handle clicking outside for Gender dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -69,6 +84,15 @@ export default function OnboardingPage() {
         username: username,
         name: username, 
       };
+
+      // 🛠️ UPDATED: Ensure the final payload uses the exact same variant they rolled
+      if (zAvatarRequested && gender !== 'Prefer not to say') {
+        payload.avatar_url = createAvatar(lorelei, {
+          seed: `${username}-${avatarVariant}`, // 🛠️ FIX: Match the preview seed here too!
+          size: 128,
+          backgroundColor: ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
+        }).toDataUri();
+      }
 
       if (bio.trim()) payload.bio = bio.trim();
       if (age.trim()) payload.age = age.trim();
@@ -126,15 +150,46 @@ export default function OnboardingPage() {
         >
           
           <div className="flex flex-col items-center justify-center mb-6">
-            <div className="relative group cursor-pointer">
-              <div className="w-24 h-24 rounded-full bg-[var(--background)] border-2 border-dashed border-[var(--border-color)] flex items-center justify-center overflow-hidden group-hover:border-[#3B82F6] transition-colors">
-                <Camera className="w-8 h-8 text-[var(--text-muted)] group-hover:text-[#3B82F6] transition-colors" />
-              </div>
-              <div className="absolute bottom-0 right-0 bg-[#3B82F6] p-2 rounded-full border-2 border-[var(--card)] shadow-sm">
-                <Camera className="w-4 h-4 text-white" />
-              </div>
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[var(--background)] border-2 border-[var(--border-color)] flex items-center justify-center overflow-hidden shadow-sm transition-all duration-300">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="Generated zAvatar" className="w-full h-full object-cover scale-110" />
+              ) : (
+                <User className="w-12 h-12 text-[var(--text-muted)]" />
+              )}
             </div>
-            <span className="text-xs font-bold text-[var(--text-muted)] mt-3">Upload Profile Picture</span>
+
+            <div className="mt-4 h-10 flex items-center justify-center">
+              {gender === 'Prefer not to say' ? (
+                <span className="text-xs font-bold text-[var(--text-muted)]">Select gender to create zAvatar</span>
+              ) : !zAvatarRequested ? (
+                <button 
+                  type="button" 
+                  onClick={() => { setZAvatarRequested(true); setAvatarVariant(0); }}
+                  disabled={!username}
+                  className="px-5 py-2.5 bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6] hover:text-white rounded-full text-xs font-bold transition-colors disabled:opacity-50"
+                >
+                  Generate zAvatar
+                </button>
+              ) : (
+                // 🛠️ UPDATED: Added the Reroll functionality here!
+                <div className="flex items-center gap-6">
+                  <button 
+                    type="button" 
+                    onClick={() => setAvatarVariant(v => v + 1)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-[#3B82F6] hover:text-blue-600 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Reroll
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => { setZAvatarRequested(false); setAvatarVariant(0); }}
+                    className="text-xs font-bold text-[var(--text-muted)] hover:text-red-500 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -223,14 +278,12 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          {/* 🛠️ UPDATED: Country Section (Read-Only Lock OR Native Fallback Dropdown) */}
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-[var(--text-main)] ml-1 flex justify-between">
               Country {isCountryLocked && <span className="text-xs font-normal text-[#3B82F6] flex items-center gap-1"><Check className="w-3 h-3"/> Auto-detected</span>}
             </label>
             
             {isCountryLocked ? (
-              // 🔒 The API Succeeded: Show an unchangeable locked UI
               <div className="w-full px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl flex items-center justify-between opacity-80 cursor-not-allowed">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#3B82F6]" />
@@ -239,7 +292,6 @@ export default function OnboardingPage() {
                 <Lock className="w-4 h-4 text-[var(--text-muted)]" />
               </div>
             ) : (
-              // ⚠️ The API Failed: Show Native Select so users can type "I" to jump to India
               <select 
                 value={country} 
                 onChange={(e) => setCountry(e.target.value)}
