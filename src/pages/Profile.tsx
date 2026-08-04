@@ -5,10 +5,11 @@ import { friendsApi } from '../api/friends';
 import { useAuth } from '../context/AuthContext';
 import UserCard from '../components/UserCard';
 import PaginationLoader from '../components/PaginationLoader';
+import { ALL_COUNTRIES } from '../constants/countries'; // 🛠️ Make sure to import this!
 import { 
   Loader2, Camera, Save, User, AtSign, AlignLeft, 
   Users, MessageSquare, Edit2, X, MapPin, Calendar, Activity,
-  LogOut, UserPlus, ShieldBan, Search, Check, Share2, CheckCircle2 // 🛠️ NEW: Added Share2 and CheckCircle2
+  LogOut, UserPlus, ShieldBan, Search, Check, Share2, CheckCircle2, Lock 
 } from 'lucide-react';
 
 const GENDER_OPTIONS = ['Any', 'Male', 'Female', 'Other'];
@@ -26,7 +27,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [copied, setCopied] = useState(false); // 🛠️ NEW: State for share link
+  const [copied, setCopied] = useState(false); 
 
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -34,6 +35,10 @@ export default function Profile() {
   const [age, setAge] = useState(''); 
   const [country, setCountry] = useState(''); 
   const [hasExistingUsername, setHasExistingUsername] = useState(false);
+
+  // 🛠️ NEW: Country Lock & Detection State
+  const [isCountryLocked, setIsCountryLocked] = useState(true); 
+  const [isDetectingCountry, setIsDetectingCountry] = useState(false);
 
   // --------------------------------------------------------
   // 2. NETWORK (FRIENDS) STATE
@@ -63,7 +68,27 @@ export default function Profile() {
         setBio(data.bio || '');
         setGender(data.gender || 'Any');
         setAge(data.age || '');
-        setCountry(data.country || '');
+        
+        if (data.country) {
+          setCountry(data.country);
+          setIsCountryLocked(true); // Lock it if we have it!
+        } else {
+          // If no country, try to auto-detect
+          try {
+            const res = await fetch("https://ipapi.co/json/");
+            const ipData = await res.json();
+            if (ipData.country) {
+              setCountry(ipData.country); 
+              setIsCountryLocked(true);
+            } else {
+              setIsCountryLocked(false);
+            }
+          } catch (ipError) {
+            console.warn("IP Geolocation failed.", ipError);
+            setIsCountryLocked(false);
+          }
+        }
+        
         if (data.username) setHasExistingUsername(true);
       } catch (err: any) {
         setError(err.message || 'Failed to load profile');
@@ -80,6 +105,7 @@ export default function Profile() {
         setNetworkLoading(true);
         setOffset(0);
         setHasMore(true);
+        setNetworkData([]); 
       }
       
       const currentOffset = reset ? 0 : offset;
@@ -147,6 +173,30 @@ export default function Profile() {
     }
   };
 
+  // 🛠️ NEW: Smart Country Change Handler
+  const handleRequestCountryChange = async () => {
+    setIsDetectingCountry(true);
+    try {
+      const res = await fetch("https://ipapi.co/json/");
+      const ipData = await res.json();
+      
+      // If API succeeds, instantly update and lock the new country
+      if (ipData.country) {
+        setCountry(ipData.country);
+        setIsCountryLocked(true);
+      } else {
+        // If API responds but fails to get country, unlock the dropdown
+        setIsCountryLocked(false);
+      }
+    } catch (err) {
+      // If API hits rate limit or crashes, gracefully fallback to dropdown
+      console.warn("IP Geolocation failed, showing manual dropdown.", err);
+      setIsCountryLocked(false);
+    } finally {
+      setIsDetectingCountry(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await logoutUser();
@@ -166,7 +216,6 @@ export default function Profile() {
     }
   };
 
-  // 🛠️ NEW: Share Profile Handler
   const handleShareProfile = () => {
     if (!authUser?.username) return;
     const profileUrl = `${window.location.origin}/user/${authUser.username}`;
@@ -189,7 +238,6 @@ export default function Profile() {
     );
   }
 
-  // GUEST STATE
   if (authUser?.is_guest) {
     return (
       <div className="max-w-4xl mx-auto w-full p-6 pb-20 text-center flex flex-col items-center justify-center min-h-[60vh]">
@@ -226,7 +274,6 @@ export default function Profile() {
               
               {error && <div className="p-3 bg-red-500/10 text-red-500 font-medium rounded-xl text-sm mb-4">{error}</div>}
 
-              {/* Stacked inputs for sidebar format */}
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2"><AtSign className="w-4 h-4 text-[#3B82F6]" /> Username</label>
@@ -235,7 +282,7 @@ export default function Profile() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-[var(--text-main)]">Gender</label>
-                  <select value={gender} onChange={(e) => setGender(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] outline-none focus:border-[#3B82F6]">
+                  <select value={gender} onChange={(e) => setGender(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] outline-none focus:border-[#3B82F6] cursor-pointer appearance-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundPosition: 'right 1rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em' }}>
                     {GENDER_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
                 </div>
@@ -245,15 +292,51 @@ export default function Profile() {
                   <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] outline-none focus:border-[#3B82F6]" placeholder="e.g. 21" />
                 </div>
 
+                {/* 🛠️ UPDATED: Country Field Logic */}
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-[var(--text-main)]">Country</label>
-                  <select value={country} onChange={(e) => setCountry(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] outline-none focus:border-[#3B82F6]">
-                    <option value="">Select country</option>
-                    <option value="India">🇮🇳 India</option>
-                    <option value="United States">🇺🇸 United States</option>
-                    <option value="United Kingdom">🇬🇧 United Kingdom</option>
-                    <option value="Global">🌍 Other</option>
-                  </select>
+                  <label className="text-sm font-bold text-[var(--text-main)] flex justify-between">
+                    Country 
+                    {isCountryLocked && <span className="text-xs font-normal text-[#3B82F6] flex items-center gap-1"><Check className="w-3 h-3"/> Auto-detected</span>}
+                  </label>
+                  
+                  {isCountryLocked ? (
+                    // API Locked State
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl flex items-center justify-between opacity-80 cursor-not-allowed">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-[#3B82F6]" />
+                          <span className="text-[var(--text-main)] font-semibold">{country}</span>
+                        </div>
+                        <Lock className="w-4 h-4 text-[var(--text-muted)]" />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={handleRequestCountryChange}
+                        disabled={isDetectingCountry}
+                        className="px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-[#3B82F6] hover:text-[#3B82F6] transition-colors disabled:opacity-50 flex items-center justify-center min-w-[90px]"
+                      >
+                        {isDetectingCountry ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update'}
+                      </button>
+                    </div>
+                  ) : (
+                    // Native Select Fallback
+                    <select 
+                      value={country} 
+                      onChange={(e) => setCountry(e.target.value)}
+                      className="w-full px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all cursor-pointer appearance-none"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                        backgroundPosition: 'right 1rem center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '1.25em 1.25em'
+                      }}
+                    >
+                      <option value="" disabled>Select country</option>
+                      {ALL_COUNTRIES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -269,7 +352,6 @@ export default function Profile() {
           ) : (
             <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 sm:p-8 shadow-sm flex flex-col items-center text-center relative">
               
-              {/* Stacked Avatar for Sidebar */}
               <div className="relative group mb-4">
                 <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[var(--background)] border-4 border-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-sm">
                   {profile?.avatar_url ? (
@@ -286,36 +368,34 @@ export default function Profile() {
               <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-main)] leading-tight">{profile?.name || username || 'New User'}</h1>
               <p className="text-[var(--text-muted)] font-medium mt-1 mb-5">@{username}</p>
 
-              {/* Badges wrapped nicely */}
               <div className="flex flex-wrap justify-center gap-2 mb-6">
                 {country && <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><MapPin className="w-3.5 h-3.5" /> {country}</span>}
                 {gender !== 'Any' && <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><Activity className="w-3.5 h-3.5" /> {gender}</span>}
                 {age && <span className="px-3 py-1 bg-[var(--background)] border border-[var(--border-color)] rounded-full text-xs font-bold flex items-center gap-1.5 text-[var(--text-main)]"><Calendar className="w-3.5 h-3.5" /> {age}</span>}
               </div>
 
-              {/* Bio Block */}
               <p className="text-sm text-[var(--text-main)] w-full leading-relaxed whitespace-pre-wrap bg-[var(--background)]/50 p-4 rounded-xl border border-[var(--border-color)] mb-6 text-left">
                 {bio || <span className="text-[var(--text-muted)] italic">No bio added yet. Click edit to introduce yourself!</span>}
               </p>
 
-              {/* 🛠️ UPDATED: Desktop Actions (Added Share Button) */}
-              <div className="w-full flex flex-wrap gap-2">
+              {/* 🛠️ UPDATED: Clean, Minimalist Action Buttons */}
+              <div className="w-full flex gap-3">
                 <button 
                   onClick={handleShareProfile} 
-                  className="flex-1 min-w-[30%] py-3 bg-[#3B82F6]/10 border border-[#3B82F6]/20 rounded-xl text-sm font-bold text-[#3B82F6] hover:bg-[#3B82F6] hover:text-white transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-[#3B82F6] hover:text-[#3B82F6] transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   {copied ? <CheckCircle2 className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                  {copied ? 'Copied!' : 'Share'}
+                  {copied ? 'Copied' : 'Share'}
                 </button>
                 <button 
                   onClick={() => setIsEditing(true)} 
-                  className="flex-1 min-w-[30%] py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-[#3B82F6] transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-[var(--text-main)] transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   <Edit2 className="w-4 h-4" /> Edit
                 </button>
                 <button 
                   onClick={handleLogout} 
-                  className="flex-1 min-w-[30%] py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-red-500 hover:text-red-500 transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   <LogOut className="w-4 h-4" /> Logout
                 </button>
@@ -324,11 +404,9 @@ export default function Profile() {
           )}
         </div>
 
-
         {/* --- RIGHT COLUMN: NETWORK HUB --- */}
         <div className="lg:col-span-8 xl:col-span-8 space-y-6">
           
-          {/* Stranger Chat Banner */}
           <div className="bg-gradient-to-r from-[#3B82F6] to-indigo-600 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-md gap-4">
             <div>
               <h3 className="text-white text-lg font-bold flex items-center gap-2 mb-1"><MessageSquare className="w-5 h-5" /> Stranger Chat</h3>
@@ -340,7 +418,6 @@ export default function Profile() {
           </div>
 
           <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-4 sm:p-6 shadow-sm min-h-[500px] flex flex-col">
-            {/* Network Tabs */}
             <div className="flex overflow-x-auto custom-scrollbar gap-2 mb-4 pb-2 flex-shrink-0 border-b border-[var(--border-color)]">
               {[
                 { id: 'friends', icon: Users, label: 'My Friends' },
@@ -359,7 +436,6 @@ export default function Profile() {
                 >
                   <tab.icon className="w-4 h-4" />
                   {tab.label}
-                  {/* Active Tab Indicator Line */}
                   {activeTab === tab.id && (
                     <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#3B82F6] rounded-t-full"></div>
                   )}
@@ -367,7 +443,6 @@ export default function Profile() {
               ))}
             </div>
 
-            {/* Search Bar */}
             {activeTab === 'search' && (
               <div className="mb-4 flex-shrink-0">
                 <div className="relative">
@@ -383,7 +458,6 @@ export default function Profile() {
               </div>
             )}
 
-            {/* User List Feed */}
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3">
               {networkLoading && networkData.length === 0 ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" /></div>

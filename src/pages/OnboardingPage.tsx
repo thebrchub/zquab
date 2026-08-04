@@ -1,25 +1,55 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, AlertCircle, Loader2, ChevronDown, Check } from 'lucide-react';
+import { Camera, AlertCircle, Loader2, ChevronDown, Check, MapPin, Lock } from 'lucide-react'; // 🛠️ Added Lock icon
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiClient } from '../api/client'; // 🛠️ Import your API client
-import { useAuth } from '../context/AuthContext'; // 🛠️ Import useAuth
+import { apiClient } from '../api/client'; 
+import { useAuth } from '../context/AuthContext'; 
+import { ALL_COUNTRIES } from '../constants/countries';
 
 const GENDER_OPTIONS = ['Prefer not to say', 'Male', 'Female', 'Other'];
 
+// 🛠️ The complete, lightweight static list of all countries (No heavy npm libraries needed!)
+
+
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { refreshSession } = useAuth(); // 🛠️ Grab the new function
+  const { refreshSession } = useAuth(); 
   const [isLoading, setIsLoading] = useState(false);
   
   const [username, setUsername] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('Prefer not to say');
   const [bio, setBio] = useState('');
+  
+  const [country, setCountry] = useState('Detecting...'); 
+  const [isCountryLocked, setIsCountryLocked] = useState(false); // 🛠️ NEW: Controls if country is changeable
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // 🛠️ Fetch Country on mount
+  useEffect(() => {
+    const fetchCountry = async () => {
+      try {
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        if (data.country) {
+          setCountry(data.country);
+          setIsCountryLocked(true); // Lock it down!
+        } else {
+          setCountry('');
+          setIsCountryLocked(false); // Let them choose manually
+        }
+      } catch (err) {
+        console.warn("IP Geolocation failed, falling back to manual selection.", err);
+        setCountry('');
+        setIsCountryLocked(false);
+      }
+    };
+    fetchCountry();
+  }, []);
+
+  // Handle clicking outside for Gender dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -35,43 +65,31 @@ export default function OnboardingPage() {
     setIsLoading(true);
     
     try {
-      // 🛠️ 1. Dynamically build the payload
       const payload: any = {
         username: username,
-        name: username, // Mirroring username to name to satisfy the backend
+        name: username, 
       };
 
-      // 🛠️ 2. Only attach bio if it's not empty
-      if (bio.trim()) {
-        payload.bio = bio.trim();
-      }
-
-      // 🛠️ 3. Translate our UI text to the Backend's expected Enum
-      if (gender === 'Prefer not to say') {
-        payload.gender = 'Any';
-      } else {
-        payload.gender = gender;
-      }
-
-      // 🛠️ 4. Send the cleaned-up payload
-      await apiClient.patch('/users/me', payload);
+      if (bio.trim()) payload.bio = bio.trim();
+      if (age.trim()) payload.age = age.trim();
       
-      // Force the AuthContext to fetch the newly saved username
-      await refreshSession();
+      if (country && country !== 'Detecting...') {
+        payload.country = country;
+      }
 
-      // Navigate home!
+      payload.gender = gender === 'Prefer not to say' ? 'Any' : gender;
+
+      await apiClient.patch('/users/me', payload);
+      await refreshSession();
       navigate('/home'); 
 
     } catch (error: any) {
       console.error(error);
-      
       if (error.response?.status === 409) {
         alert("That username is either already taken, or your profile is already permanently set up! Try refreshing the page.");
       } else {
-        // 🛠️ If the backend rejects something (like a 400 Bad Request), we will now see the exact reason
         alert(error.response?.data?.error || "Failed to save profile. Please try again.");
       }
-      
     } finally {
       setIsLoading(false);
     }
@@ -146,10 +164,9 @@ export default function OnboardingPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            
             <div className="space-y-1.5">
               <label className="text-sm font-bold text-[var(--text-main)] ml-1">
-                Age <span className="text-[var(--text-muted)] font-normal text-xs"></span>
+                Age
               </label>
               <input
                 type="number"
@@ -204,7 +221,42 @@ export default function OnboardingPage() {
                 </AnimatePresence>
               </div>
             </div>
+          </div>
+
+          {/* 🛠️ UPDATED: Country Section (Read-Only Lock OR Native Fallback Dropdown) */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-bold text-[var(--text-main)] ml-1 flex justify-between">
+              Country {isCountryLocked && <span className="text-xs font-normal text-[#3B82F6] flex items-center gap-1"><Check className="w-3 h-3"/> Auto-detected</span>}
+            </label>
             
+            {isCountryLocked ? (
+              // 🔒 The API Succeeded: Show an unchangeable locked UI
+              <div className="w-full px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl flex items-center justify-between opacity-80 cursor-not-allowed">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#3B82F6]" />
+                  <span className="text-[var(--text-main)] font-semibold">{country}</span>
+                </div>
+                <Lock className="w-4 h-4 text-[var(--text-muted)]" />
+              </div>
+            ) : (
+              // ⚠️ The API Failed: Show Native Select so users can type "I" to jump to India
+              <select 
+                value={country} 
+                onChange={(e) => setCountry(e.target.value)}
+                className="w-full px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all cursor-pointer appearance-none"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                  backgroundPosition: 'right 1rem center',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundSize: '1.25em 1.25em'
+                }}
+              >
+                <option value="" disabled>Select country</option>
+                {ALL_COUNTRIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="space-y-1.5">

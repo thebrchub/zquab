@@ -13,7 +13,7 @@ export const usersApi = {
   
   // Requires username and name
   updateMeFull: async (data: { username: string; name: string; mobile?: string; gender?: string; avatar_url?: string; show_last_seen?: boolean; bio?: string; country?: string }) => {
-    const res = await apiClient.put('/users/me', data);
+    const res = await apiClient.patch('/users/me', data);
     return res.data;
   },
   
