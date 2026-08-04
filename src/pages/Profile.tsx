@@ -326,7 +326,7 @@ export default function Profile() {
                       disabled={!username}
                       className="px-5 py-2.5 bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6] hover:text-white rounded-full text-xs font-bold transition-colors disabled:opacity-50"
                     >
-                      Generate New zAvatar ✨
+                      Generate New zAvatar
                     </button>
                   ) : (
                     <div className="flex items-center gap-6">
