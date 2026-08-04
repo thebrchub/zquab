@@ -78,10 +78,13 @@ export default function SearchPage() {
     });
   };
 
+  // 🛠️ UPDATED: Added engaging text to the clipboard copy
   const handleCopyLink = () => {
     if (!user?.username) return;
     const profileUrl = `${window.location.origin}/user/${user.username}`;
-    navigator.clipboard.writeText(profileUrl);
+    const shareText = `Hey! Connect with me on zQuab 🚀\n\n${profileUrl}`;
+    
+    navigator.clipboard.writeText(shareText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

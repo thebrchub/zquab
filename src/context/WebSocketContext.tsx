@@ -93,6 +93,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           payload: decodedPayload,
         });
 
+        if (envelope.type === 'chat_message') {
+          window.dispatchEvent(new CustomEvent('zquab_notification', { 
+            detail: { message: 'New Message! 💬' } 
+          }));
+        }
+
       } catch (err) {
         console.error('Failed to decode WS message:', err);
       }

@@ -26,6 +26,7 @@ export default function FriendsHub() {
         setLoading(true);
         setOffset(0);
         setHasMore(true);
+        setData([]); // 🛠️ FIX: Instantly wipe the old data so it never flashes!
       }
       
       const currentOffset = reset ? 0 : offset;
@@ -38,8 +39,6 @@ export default function FriendsHub() {
       } else if (activeTab === 'blocked') {
         results = await friendsApi.getBlockedUsers(LIMIT, currentOffset);
       } else if (activeTab === 'search' && searchQuery.trim()) {
-        // 🛠️ SWAPPED: Now searching the entire zQuab network to find NEW people
-        // Make sure to import usersApi at the top of your file!
         results = await usersApi.searchUsers(searchQuery);
         setHasMore(false); 
       }

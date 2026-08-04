@@ -8,7 +8,7 @@ import PaginationLoader from '../components/PaginationLoader';
 import { 
   Loader2, Camera, Save, User, AtSign, AlignLeft, 
   Users, MessageSquare, Edit2, X, MapPin, Calendar, Activity,
-  LogOut, UserPlus, ShieldBan, Search, Check
+  LogOut, UserPlus, ShieldBan, Search, Check, Share2, CheckCircle2 // 🛠️ NEW: Added Share2 and CheckCircle2
 } from 'lucide-react';
 
 const GENDER_OPTIONS = ['Any', 'Male', 'Female', 'Other'];
@@ -26,6 +26,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [copied, setCopied] = useState(false); // 🛠️ NEW: State for share link
 
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -165,6 +166,17 @@ export default function Profile() {
     }
   };
 
+  // 🛠️ NEW: Share Profile Handler
+  const handleShareProfile = () => {
+    if (!authUser?.username) return;
+    const profileUrl = `${window.location.origin}/user/${authUser.username}`;
+    const shareText = `Hey! Connect with me on zQuab 🚀\n\n${profileUrl}`;
+    
+    navigator.clipboard.writeText(shareText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   // --------------------------------------------------------
   // 5. RENDER
   // --------------------------------------------------------
@@ -196,10 +208,8 @@ export default function Profile() {
   }
 
   return (
-    // 🛠️ CHANGED: Expanded to max-w-7xl for full space utilization
     <div className="max-w-7xl mx-auto w-full p-4 md:p-6 lg:p-8 pb-24">
       
-      {/* 🛠️ NEW: Two-Column CSS Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 relative">
         
         {/* --- LEFT COLUMN: STICKY PROFILE SIDEBAR --- */}
@@ -288,12 +298,25 @@ export default function Profile() {
                 {bio || <span className="text-[var(--text-muted)] italic">No bio added yet. Click edit to introduce yourself!</span>}
               </p>
 
-              {/* Desktop Actions */}
-              <div className="w-full flex gap-3">
-                <button onClick={() => setIsEditing(true)} className="flex-1 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-[#3B82F6] transition-colors flex items-center justify-center gap-2">
+              {/* 🛠️ UPDATED: Desktop Actions (Added Share Button) */}
+              <div className="w-full flex flex-wrap gap-2">
+                <button 
+                  onClick={handleShareProfile} 
+                  className="flex-1 min-w-[30%] py-3 bg-[#3B82F6]/10 border border-[#3B82F6]/20 rounded-xl text-sm font-bold text-[#3B82F6] hover:bg-[#3B82F6] hover:text-white transition-colors flex items-center justify-center gap-2"
+                >
+                  {copied ? <CheckCircle2 className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                  {copied ? 'Copied!' : 'Share'}
+                </button>
+                <button 
+                  onClick={() => setIsEditing(true)} 
+                  className="flex-1 min-w-[30%] py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-sm font-bold text-[var(--text-main)] hover:border-[#3B82F6] transition-colors flex items-center justify-center gap-2"
+                >
                   <Edit2 className="w-4 h-4" /> Edit
                 </button>
-                <button onClick={handleLogout} className="flex-1 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
+                <button 
+                  onClick={handleLogout} 
+                  className="flex-1 min-w-[30%] py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2"
+                >
                   <LogOut className="w-4 h-4" /> Logout
                 </button>
               </div>

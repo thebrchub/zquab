@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react'; // 🛠️ ADDED: useEffect
 import { ThemeProvider } from './hooks/useTheme';
 import RootLayout from './layout/RootLayout';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -8,8 +8,7 @@ import { RoomsProvider } from './context/RoomsContext';
 import { Loader2 } from 'lucide-react';
 import BlogPost from './pages/BlogPost';
 
-// Route-level code splitting — each page is only fetched when its route is
-// actually visited, instead of every page bundling into the initial load.
+// Route-level code splitting
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const AuthPage = lazy(() => import('./pages/AuthPage'));
@@ -37,7 +36,7 @@ function RouteFallback() {
   );
 }
 
-// 1. Protected Route Wrapper (For standard logged-in pages)
+// 1. Protected Route Wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   
@@ -49,12 +48,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
   
-  // If there is no session, OR the user is just a Guest, redirect them to Auth
   if (!user || user.is_guest) {
     return <Navigate to="/auth" replace />;
   }
 
-  // If they are a registered user but haven't set a username yet, force onboarding
   if (!user.username) {
     return <Navigate to="/onboarding" replace />;
   }
@@ -62,14 +59,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// 2. Auth Route Wrapper (Prevents logged-in users from seeing the login page)
+// 2. Auth Route Wrapper
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   
   if (isLoading) return null;
   
   if (user && !user.is_guest) {
-    // Direct to onboarding if profile is incomplete, otherwise to home
     if (!user.username) return <Navigate to="/onboarding" replace />;
     return <Navigate to="/home" replace />;
   }
@@ -77,22 +73,70 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// 3. Onboarding Route Wrapper (Locks users here until profile is complete)
+// 3. Onboarding Route Wrapper
 function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   
   if (isLoading) return null;
-
-  // Must be logged in via Google to see this page
   if (!user || user.is_guest) return <Navigate to="/auth" replace />;
-  
-  // If they already have a username, they don't need onboarding anymore
   if (user.username) return <Navigate to="/home" replace />;
   
   return <>{children}</>;
 }
 
+// 🛠️ NEW: Global Tab Blinker Hook
+// This runs in the background and only activates if the user is on another tab
+function useTabBlinker() {
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const originalTitle = document.title;
+    let isBlinking = false;
+
+    const startBlinking = (e: any) => {
+      // document.hidden ensures it ONLY blinks if they are not actively looking at the site
+      if (document.hidden && !isBlinking) {
+        isBlinking = true;
+        const message = e.detail?.message || 'New Message! 💬';
+        let toggle = false;
+        
+        interval = setInterval(() => {
+          document.title = toggle ? message : originalTitle;
+          toggle = !toggle;
+        }, 1000);
+      }
+    };
+
+    const stopBlinking = () => {
+      if (isBlinking) {
+        isBlinking = false;
+        if (interval) clearInterval(interval);
+        document.title = originalTitle;
+      }
+    };
+
+    // Listen for our custom zQuab event
+    window.addEventListener('zquab_notification', startBlinking);
+    
+    // Stop blinking immediately when they come back to the tab
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) stopBlinking();
+    });
+    window.addEventListener('focus', stopBlinking);
+
+    return () => {
+      window.removeEventListener('zquab_notification', startBlinking);
+      window.removeEventListener('visibilitychange', stopBlinking);
+      window.removeEventListener('focus', stopBlinking);
+      if (interval) clearInterval(interval);
+      document.title = originalTitle;
+    };
+  }, []);
+}
+
 function App() {
+  // 🛠️ ACTIVATE THE GLOBAL HOOK HERE
+  useTabBlinker();
+
   return (
     <ThemeProvider>
       <AuthProvider>
@@ -113,67 +157,25 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/safety" element={<Safety />} />
                 <Route path="/contact" element={<Contact />} />
-                {/* Public search & profile views — backend allows anonymous/guest
-                    access to both search and individual profiles (reduced payload,
-                    no friend_request_status for anon); SearchPage/UserProfile handle
-                    permissions themselves, no auth guard needed. */}
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/user/:username" element={<UserProfile />} />
 
                 {/* Auth Route */}
-                <Route 
-                  path="/auth" 
-                  element={
-                    <AuthRoute>
-                      <AuthPage />
-                    </AuthRoute>
-                  } 
-                />
+                <Route path="/auth" element={<AuthRoute><AuthPage /></AuthRoute>} />
 
                 {/* Onboarding Route */}
-                <Route 
-                  path="/onboarding" 
-                  element={
-                    <OnboardingRoute>
-                      <OnboardingPage />
-                    </OnboardingRoute>
-                  } 
-                />
+                <Route path="/onboarding" element={<OnboardingRoute><OnboardingPage /></OnboardingRoute>} />
 
                 {/* Protected Dashboard & Social Routes */}
-                <Route 
-                  path="/home" 
-                  element={
-                    <ProtectedRoute>
-                      <HomePage />
-                    </ProtectedRoute>
-                  } 
-                />
+                <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+                <Route path="/chat/:roomId" element={<ProtectedRoute><ChatRoom /></ProtectedRoute>} />
+                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 
-                <Route 
-                  path="/chat/:roomId" 
-                  element={
-                    <ProtectedRoute>
-                      <ChatRoom />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/profile" 
-                  element={
-                    <ProtectedRoute>
-                      <Profile />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* 🛠️ FIX: The ONE and ONLY catch-all route, placed inside RootLayout! */}
                 <Route path="*" element={<NotFoundPage />} />
                 
               </Route>
 
-              {/* 🛠️ DEV UI TESTING ROUTES (No Auth Wrappers) */}
+              {/* DEV UI TESTING ROUTES */}
               <Route path="/dev/onboarding" element={<OnboardingPage />} />
               <Route path="/dev/auth" element={<AuthPage />} />
               <Route path="/dev/home" element={<HomePage />} />
