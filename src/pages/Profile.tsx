@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { useAuth } from '../context/AuthContext';
 import UserCard from '../components/UserCard';
 import PaginationLoader from '../components/PaginationLoader';
-import { ALL_COUNTRIES } from '../constants/countries'; // 🛠️ Make sure to import this!
+import { ALL_COUNTRIES } from '../constants/countries'; 
 import { 
-  Loader2, Camera, Save, User, AtSign, AlignLeft, 
+  Loader2, Save, User, AtSign, AlignLeft, 
   Users, MessageSquare, Edit2, X, MapPin, Calendar, Activity,
-  LogOut, UserPlus, ShieldBan, Search, Check, Share2, CheckCircle2, Lock 
+  LogOut, UserPlus, ShieldBan, Search, Check, Share2, CheckCircle2, Lock, RefreshCw 
 } from 'lucide-react';
+
+// 🛠️ NEW: Import DiceBear for the Profile page
+import { createAvatar } from '@dicebear/core';
+import { lorelei } from '@dicebear/collection';
 
 const GENDER_OPTIONS = ['Any', 'Male', 'Female', 'Other'];
 type Tab = 'friends' | 'requests' | 'search' | 'blocked';
@@ -36,9 +40,26 @@ export default function Profile() {
   const [country, setCountry] = useState(''); 
   const [hasExistingUsername, setHasExistingUsername] = useState(false);
 
-  // 🛠️ NEW: Country Lock & Detection State
   const [isCountryLocked, setIsCountryLocked] = useState(true); 
   const [isDetectingCountry, setIsDetectingCountry] = useState(false);
+
+  // 🛠️ NEW: Avatar Generation State
+  const [zAvatarRequested, setZAvatarRequested] = useState(false);
+  const [avatarVariant, setAvatarVariant] = useState(0);
+
+  // 🛠️ NEW: Live Preview Logic
+  const avatarPreview = useMemo(() => {
+    // If they haven't requested a new one, show their existing avatar or null
+    if (!zAvatarRequested) return profile?.avatar_url || null;
+    
+    // Otherwise, generate a fresh live preview
+    if (!username) return null;
+    return createAvatar(lorelei, {
+      seed: `${username}-${avatarVariant}`,
+      size: 128,
+      backgroundColor: ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
+    }).toDataUri();
+  }, [username, avatarVariant, zAvatarRequested, profile?.avatar_url]);
 
   // --------------------------------------------------------
   // 2. NETWORK (FRIENDS) STATE
@@ -71,9 +92,8 @@ export default function Profile() {
         
         if (data.country) {
           setCountry(data.country);
-          setIsCountryLocked(true); // Lock it if we have it!
+          setIsCountryLocked(true); 
         } else {
-          // If no country, try to auto-detect
           try {
             const res = await fetch("https://ipapi.co/json/");
             const ipData = await res.json();
@@ -160,12 +180,25 @@ export default function Profile() {
       const payload: any = { bio, gender, country };
       if (!hasExistingUsername && username) payload.username = username;
       
+      // 🛠️ NEW: Inject the newly generated avatar into the payload if requested
+      let newAvatarUrl = profile?.avatar_url;
+      if (zAvatarRequested) {
+        newAvatarUrl = createAvatar(lorelei, {
+          seed: `${username}-${avatarVariant}`,
+          size: 128,
+          backgroundColor: ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
+        }).toDataUri();
+        payload.avatar_url = newAvatarUrl;
+      }
+      
       const updated = await usersApi.updateMePartial(payload);
-      setProfile({ ...updated, age, country }); 
+      
+      setProfile({ ...updated, age, country, avatar_url: newAvatarUrl }); 
       setCountry(country);
       if (updated.username) setHasExistingUsername(true);
       
       setIsEditing(false); 
+      setZAvatarRequested(false); // Reset the generator state after saving
     } catch (err: any) {
       setError(err.message || 'Failed to update profile');
     } finally {
@@ -173,23 +206,18 @@ export default function Profile() {
     }
   };
 
-  // 🛠️ NEW: Smart Country Change Handler
   const handleRequestCountryChange = async () => {
     setIsDetectingCountry(true);
     try {
       const res = await fetch("https://ipapi.co/json/");
       const ipData = await res.json();
-      
-      // If API succeeds, instantly update and lock the new country
       if (ipData.country) {
         setCountry(ipData.country);
         setIsCountryLocked(true);
       } else {
-        // If API responds but fails to get country, unlock the dropdown
         setIsCountryLocked(false);
       }
     } catch (err) {
-      // If API hits rate limit or crashes, gracefully fallback to dropdown
       console.warn("IP Geolocation failed, showing manual dropdown.", err);
       setIsCountryLocked(false);
     } finally {
@@ -267,12 +295,59 @@ export default function Profile() {
             <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 shadow-sm animate-in fade-in zoom-in-95">
               <div className="flex items-center justify-between mb-6 border-b border-[var(--border-color)] pb-4">
                 <h2 className="text-xl font-bold text-[var(--text-main)]">Edit Profile</h2>
-                <button onClick={() => setIsEditing(false)} className="p-2 bg-[var(--background)] rounded-full hover:bg-[var(--border-color)] transition-colors">
+                <button 
+                  onClick={() => {
+                    setIsEditing(false);
+                    setZAvatarRequested(false); // Cancel avatar generation if they exit edit mode
+                  }} 
+                  className="p-2 bg-[var(--background)] rounded-full hover:bg-[var(--border-color)] transition-colors"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
               {error && <div className="p-3 bg-red-500/10 text-red-500 font-medium rounded-xl text-sm mb-4">{error}</div>}
+
+              {/* 🛠️ UPDATED: zAvatar Generation UI in Edit Mode */}
+              <div className="flex flex-col items-center justify-center mb-6">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[var(--background)] border-2 border-[var(--border-color)] flex items-center justify-center overflow-hidden shadow-sm transition-all duration-300">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover scale-110" />
+                  ) : (
+                    <User className="w-12 h-12 text-[var(--text-muted)]" />
+                  )}
+                </div>
+
+                <div className="mt-4 h-10 flex items-center justify-center">
+                  {!zAvatarRequested ? (
+                    <button 
+                      type="button" 
+                      onClick={() => { setZAvatarRequested(true); setAvatarVariant(0); }}
+                      disabled={!username}
+                      className="px-5 py-2.5 bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6] hover:text-white rounded-full text-xs font-bold transition-colors disabled:opacity-50"
+                    >
+                      Generate New zAvatar ✨
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-6">
+                      <button 
+                        type="button" 
+                        onClick={() => setAvatarVariant(v => v + 1)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#3B82F6] hover:text-blue-600 transition-colors"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Reroll
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => { setZAvatarRequested(false); setAvatarVariant(0); }}
+                        className="text-xs font-bold text-[var(--text-muted)] hover:text-red-500 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -292,7 +367,6 @@ export default function Profile() {
                   <input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full bg-[var(--background)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-[var(--text-main)] outline-none focus:border-[#3B82F6]" placeholder="e.g. 21" />
                 </div>
 
-                {/* 🛠️ UPDATED: Country Field Logic */}
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-[var(--text-main)] flex justify-between">
                     Country 
@@ -300,7 +374,6 @@ export default function Profile() {
                   </label>
                   
                   {isCountryLocked ? (
-                    // API Locked State
                     <div className="flex items-center gap-2">
                       <div className="flex-1 px-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl flex items-center justify-between opacity-80 cursor-not-allowed">
                         <div className="flex items-center gap-2">
@@ -319,7 +392,6 @@ export default function Profile() {
                       </button>
                     </div>
                   ) : (
-                    // Native Select Fallback
                     <select 
                       value={country} 
                       onChange={(e) => setCountry(e.target.value)}
@@ -355,14 +427,12 @@ export default function Profile() {
               <div className="relative group mb-4">
                 <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[var(--background)] border-4 border-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-sm">
                   {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                   
+                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover scale-110" />
                   ) : (
                     <User className="w-12 h-12 sm:w-14 sm:h-14 text-[var(--text-muted)]" />
                   )}
                 </div>
-                <button onClick={() => setIsEditing(true)} className="absolute bottom-0 right-0 w-9 h-9 bg-[var(--card)] border-2 border-[var(--border-color)] rounded-full flex items-center justify-center text-[var(--text-main)] hover:text-[#3B82F6] transition-colors shadow-sm">
-                  <Camera className="w-4 h-4" />
-                </button>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-main)] leading-tight">{profile?.name || username || 'New User'}</h1>
@@ -378,7 +448,6 @@ export default function Profile() {
                 {bio || <span className="text-[var(--text-muted)] italic">No bio added yet. Click edit to introduce yourself!</span>}
               </p>
 
-              {/* 🛠️ UPDATED: Clean, Minimalist Action Buttons */}
               <div className="w-full flex gap-3">
                 <button 
                   onClick={handleShareProfile} 
