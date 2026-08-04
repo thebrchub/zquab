@@ -4,7 +4,8 @@ import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { roomsApi } from '../api/rooms';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn, Users, MapPin, Calendar } from 'lucide-react';
+// 🛠️ UPDATED: Added Activity and User icons for the new badges
+import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn, Users, MapPin, Calendar, Activity, User } from 'lucide-react';
 
 export default function UserProfile() {
   const { username } = useParams<{ username: string }>();
@@ -12,10 +13,18 @@ export default function UserProfile() {
   const { user } = useAuth();
   
   const [profile, setProfile] = useState<any>(null);
-  const [friendsList, setFriendsList] = useState<any[]>([]); // 🛠️ NEW: State for public friends list
+  const [friendsList, setFriendsList] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 🛠️ NEW: The Self-Redirect Logic
+  useEffect(() => {
+    // If the logged-in user tries to look at their own public profile, bounce them to their private dashboard!
+    if (user && user.username === username) {
+      navigate('/profile', { replace: true });
+    }
+  }, [user, username, navigate]);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -24,8 +33,6 @@ export default function UserProfile() {
         setLoading(true);
         setError(null);
         
-        // 🛠️ Fetch profile and friends concurrently. 
-        // Using a catch on getUserFriends so the page still loads if the backend endpoint isn't ready yet.
         const [profileData, friendsData] = await Promise.all([
           usersApi.getUserProfile(username),
           usersApi.getUserFriends(username).catch(() => []) 
@@ -178,21 +185,18 @@ export default function UserProfile() {
   };
 
   return (
-    // 🛠️ Expanded container width for a proper social media feel
     <div className="max-w-4xl mx-auto w-full p-4 md:p-6 lg:p-8 pb-24">
       
-      {/* --- PROFILE HEADER CARD --- */}
       <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] overflow-hidden shadow-sm mb-8">
         
-        {/* Cover Photo Area */}
         <div className="h-32 sm:h-48 bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-purple-500/20 w-full relative"></div>
         
         <div className="px-6 sm:px-10 pb-8 relative">
-          {/* Avatar Header Layout */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-16 sm:-mt-20 mb-6 relative z-10">
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[var(--card)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-xl">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
+                // 🛠️ UPDATED: Added scale-110 so zAvatars fit flawlessly!
+                <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover scale-110" />
               ) : (
                 <span className="text-5xl font-black text-[var(--text-muted)]">{profile.name?.charAt(0)?.toUpperCase()}</span>
               )}
@@ -203,25 +207,46 @@ export default function UserProfile() {
             </div>
           </div>
           
-          {/* User Info */}
           <div>
             <h1 className="text-3xl font-black text-[var(--text-main)] leading-tight tracking-tight">{profile.name}</h1>
             <p className="text-base text-[var(--text-muted)] font-medium mb-4">@{profile.username}</p>
             
-            {/* Badges */}
+            {/* 🛠️ UPDATED: Complete Badges Area */}
             <div className="flex flex-wrap items-center gap-3 text-sm font-medium mb-6">
+              
+              {/* Friends Count */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                 <Users className="w-4 h-4 text-[#3B82F6]" />
                 <strong>{profile.friend_count || 0}</strong> <span className="text-[var(--text-muted)]">Friends</span>
               </div>
+              
+              {/* Join Date */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                 <Calendar className="w-4 h-4 text-[#3B82F6]" />
                 <span className="text-[var(--text-muted)]">Joined {new Date(profile.doj).getFullYear()}</span>
               </div>
+              
+              {/* Location */}
               {profile.country && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                   <MapPin className="w-4 h-4 text-[#3B82F6]" />
                   <span className="text-[var(--text-muted)]">{profile.country}</span>
+                </div>
+              )}
+
+              {/* Gender */}
+              {profile.gender && profile.gender !== 'Any' && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
+                  <Activity className="w-4 h-4 text-[#3B82F6]" />
+                  <span className="text-[var(--text-muted)]">{profile.gender}</span>
+                </div>
+              )}
+
+              {/* Age */}
+              {profile.age && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
+                  <User className="w-4 h-4 text-[#3B82F6]" />
+                  <span className="text-[var(--text-muted)]">{profile.age} Yrs</span>
                 </div>
               )}
             </div>
@@ -268,14 +293,13 @@ export default function UserProfile() {
                 <div className="relative mb-3">
                   <div className="w-16 h-16 rounded-full bg-[var(--background)] border border-[var(--border-color)] overflow-hidden group-hover:scale-105 transition-transform">
                     {friend.avatar_url ? (
-                      <img src={friend.avatar_url} alt={friend.name} className="w-full h-full object-cover" />
+                      <img src={friend.avatar_url} alt={friend.name} className="w-full h-full object-cover scale-110" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center font-bold text-xl text-[var(--text-muted)]">
                         {friend.name.charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
-                  {/* 🛠️ ADDED: Online status indicator */}
                   {friend.is_online && (
                     <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-[var(--card)] rounded-full animate-pulse"></div>
                   )}
