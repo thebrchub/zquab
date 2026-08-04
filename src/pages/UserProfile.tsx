@@ -4,8 +4,8 @@ import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { roomsApi } from '../api/rooms';
 import { useAuth } from '../context/AuthContext';
-// 🛠️ UPDATED: Added Activity and User icons for the new badges
-import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn, Users, MapPin, Calendar, Activity, User } from 'lucide-react';
+// 🛠️ UPDATED: Added AlertTriangle for the warning modal
+import { Loader2, UserPlus, Clock, MessageSquare, UserX, LogIn, Users, MapPin, Calendar, Activity, User, AlertTriangle } from 'lucide-react';
 
 export default function UserProfile() {
   const { username } = useParams<{ username: string }>();
@@ -18,9 +18,10 @@ export default function UserProfile() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 🛠️ NEW: The Self-Redirect Logic
+  // 🛠️ NEW: State to control the Unfriend Warning Modal
+  const [showUnfriendConfirm, setShowUnfriendConfirm] = useState(false);
+
   useEffect(() => {
-    // If the logged-in user tries to look at their own public profile, bounce them to their private dashboard!
     if (user && user.username === username) {
       navigate('/profile', { replace: true });
     }
@@ -73,6 +74,23 @@ export default function UserProfile() {
     }
   };
 
+  // 🛠️ NEW: Dedicated handler for Unfriending
+  const handleUnfriend = async () => {
+    if (!username) return;
+    setActionLoading(true);
+    try {
+      // Note: Ensure `removeFriend` exists in your friendsApi. If it's named differently, update it here!
+      await friendsApi.removeFriend(username);
+      setProfile({ ...profile, friend_request_status: 'none', friend_count: Math.max(0, profile.friend_count - 1) });
+      setShowUnfriendConfirm(false);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to remove friend');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleMessage = async () => {
     if (!username) return;
     setActionLoading(true);
@@ -120,14 +138,25 @@ export default function UserProfile() {
 
     if (profile.friend_request_status === 'friends') {
       return (
-        <button 
-          onClick={handleMessage}
-          disabled={actionLoading}
-          className="w-full sm:w-auto px-8 py-3 bg-[#3B82F6] text-white rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/20"
-        >
-          {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
-          Message
-        </button>
+        // 🛠️ UPDATED: Added the Unfriend Button right next to Message
+        <div className="flex gap-3 w-full sm:w-auto">
+          <button 
+            onClick={handleMessage}
+            disabled={actionLoading}
+            className="flex-1 sm:flex-none px-8 py-3 bg-[#3B82F6] text-white rounded-xl font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/20"
+          >
+            {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
+            Message
+          </button>
+          <button 
+            onClick={() => setShowUnfriendConfirm(true)}
+            disabled={actionLoading}
+            className="flex-none px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-muted)] rounded-xl font-bold hover:border-red-500 hover:text-red-500 hover:bg-red-500/10 transition-colors flex items-center justify-center disabled:opacity-50"
+            title="Remove Friend"
+          >
+            <UserX className="w-5 h-5" />
+          </button>
+        </div>
       );
     }
     
@@ -187,7 +216,39 @@ export default function UserProfile() {
   return (
     <div className="max-w-4xl mx-auto w-full p-4 md:p-6 lg:p-8 pb-24">
       
-      <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] overflow-hidden shadow-sm mb-8">
+      {/* 🛠️ NEW: Unfriend Confirmation Modal Overlay */}
+      {showUnfriendConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 sm:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 mx-auto border border-red-500/20">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-[var(--text-main)] text-center mb-2">Remove Friend?</h3>
+            <p className="text-[var(--text-muted)] text-center mb-8 leading-relaxed">
+              Are you sure you want to unfriend <strong className="text-[var(--text-main)]">{profile.name}</strong>? Your chat history with them will be permanently wiped out, and you won't be able to message them again unless you reconnect.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowUnfriendConfirm(false)}
+                disabled={actionLoading}
+                className="flex-1 py-3.5 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold hover:border-[#3B82F6] transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleUnfriend}
+                disabled={actionLoading}
+                className="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-red-500/25"
+              >
+                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Unfriend'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- PROFILE HEADER CARD --- */}
+      <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] overflow-hidden shadow-sm mb-8 relative z-10">
         
         <div className="h-32 sm:h-48 bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-purple-500/20 w-full relative"></div>
         
@@ -195,7 +256,6 @@ export default function UserProfile() {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-16 sm:-mt-20 mb-6 relative z-10">
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[var(--card)] bg-[var(--border-color)] overflow-hidden flex items-center justify-center shadow-xl">
               {profile.avatar_url ? (
-                // 🛠️ UPDATED: Added scale-110 so zAvatars fit flawlessly!
                 <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover scale-110" />
               ) : (
                 <span className="text-5xl font-black text-[var(--text-muted)]">{profile.name?.charAt(0)?.toUpperCase()}</span>
@@ -211,38 +271,27 @@ export default function UserProfile() {
             <h1 className="text-3xl font-black text-[var(--text-main)] leading-tight tracking-tight">{profile.name}</h1>
             <p className="text-base text-[var(--text-muted)] font-medium mb-4">@{profile.username}</p>
             
-            {/* 🛠️ UPDATED: Complete Badges Area */}
             <div className="flex flex-wrap items-center gap-3 text-sm font-medium mb-6">
-              
-              {/* Friends Count */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                 <Users className="w-4 h-4 text-[#3B82F6]" />
                 <strong>{profile.friend_count || 0}</strong> <span className="text-[var(--text-muted)]">Friends</span>
               </div>
-              
-              {/* Join Date */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                 <Calendar className="w-4 h-4 text-[#3B82F6]" />
                 <span className="text-[var(--text-muted)]">Joined {new Date(profile.doj).getFullYear()}</span>
               </div>
-              
-              {/* Location */}
               {profile.country && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                   <MapPin className="w-4 h-4 text-[#3B82F6]" />
                   <span className="text-[var(--text-muted)]">{profile.country}</span>
                 </div>
               )}
-
-              {/* Gender */}
               {profile.gender && profile.gender !== 'Any' && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                   <Activity className="w-4 h-4 text-[#3B82F6]" />
                   <span className="text-[var(--text-muted)]">{profile.gender}</span>
                 </div>
               )}
-
-              {/* Age */}
               {profile.age && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)]">
                   <User className="w-4 h-4 text-[#3B82F6]" />
