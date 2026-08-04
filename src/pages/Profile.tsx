@@ -9,7 +9,7 @@ import { ALL_COUNTRIES } from '../constants/countries';
 import { 
   Loader2, Save, User, AtSign, AlignLeft, 
   Users, MessageSquare, Edit2, X, MapPin, Calendar, Activity,
-  LogOut, UserPlus, ShieldBan, Search, Check, Share2, CheckCircle2, Lock, RefreshCw 
+  LogOut, UserPlus, Search, Check, Share2, CheckCircle2, Lock, RefreshCw 
 } from 'lucide-react';
 
 // 🛠️ NEW: Import DiceBear for the Profile page
@@ -492,7 +492,7 @@ export default function Profile() {
                 { id: 'friends', icon: Users, label: 'My Friends' },
                 { id: 'requests', icon: UserPlus, label: 'Requests' },
                 { id: 'search', icon: Search, label: 'Find Friends' },
-                { id: 'blocked', icon: ShieldBan, label: 'Blocked' }
+                // { id: 'blocked', icon: ShieldBan, label: 'Blocked' }
               ].map(tab => (
                 <button
                   key={tab.id}
