@@ -3,16 +3,25 @@ import protobuf from 'protobufjs';
 import chatProtoSrc from '../proto/chat.proto?raw';
 import eventsProtoSrc from '../proto/events.proto?raw';
 
-// 🛠️ Parse the protobufs directly from the raw string (same as chatClient.ts)
 const root = new protobuf.Root();
 protobuf.parse(chatProtoSrc, root);
 protobuf.parse(eventsProtoSrc, root);
+
+// 🛠️ FIX: Safe lookups to prevent fatal crashes if the namespace differs
+const safeLookup = (name: string, fallbackName: string) => {
+  try { return root.lookupType(name); } 
+  catch { 
+    try { return root.lookupType(fallbackName); } 
+    catch { return null; }
+  }
+};
+
 const Envelope = root.lookupType('chatpb.Envelope');
 const ChatMessageProto = root.lookupType('chatpb.ChatMessage');
-const ReceiptProto = root.lookupType ? root.lookupType('chatpb.Receipt') : null;
-const PhotoRequestProto = root.lookupType('eventspb.PhotoRequest');
-const PhotoResponseProto = root.lookupType('eventspb.PhotoResponse');
-const PhotoReadyProto = root.lookupType('eventspb.PhotoReady');
+const ReceiptProto = safeLookup('chatpb.Receipt', 'Receipt');
+const PhotoRequestProto = safeLookup('eventspb.PhotoRequest', 'PhotoRequest');
+const PhotoResponseProto = safeLookup('eventspb.PhotoResponse', 'PhotoResponse');
+const PhotoReadyProto = safeLookup('eventspb.PhotoReady', 'PhotoReady');
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -29,15 +38,16 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const connect = () => {
+    // 🛠️ FIX: Removed the early return so you can actually test on localhost!
     if (import.meta.env.DEV || window.location.hostname === 'localhost') {
-      console.warn('🛠️ DEV MODE: WebSocket connection disabled to prevent backend spam.');
-      return; 
+      console.info('🛠️ DEV MODE: Connecting to WebSocket for local testing.');
     }
+    
     const WS_BASE = import.meta.env.VITE_WS_BASE_URL ?? 'wss://api.zquab.com';
     const wsUrl = `${WS_BASE}/ws`;
     
     const ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer'; // Crucial for protobuf!
+    ws.binaryType = 'arraybuffer'; 
 
     ws.onopen = () => {
       console.log('WebSocket connected');
@@ -53,34 +63,30 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       try {
         if (!(event.data instanceof ArrayBuffer)) return;
 
-        // Decode the outer envelope
         const bytes = new Uint8Array(event.data);
         const envelope = Envelope.decode(bytes) as any;
 
         let decodedPayload: any = envelope.payload;
 
-        // If there's an inner payload, try to decode according to the envelope type
         if (envelope.payload && envelope.payload.length > 0) {
           try {
             const t: string = envelope.type || '';
 
-            // Common server->client chat message variants contain a ChatMessage
             if (t === 'message_delivered' || t === 'message_sent_confirm' || t === 'chat_message') {
               decodedPayload = ChatMessageProto.decode(envelope.payload);
-            }
-            // Direct photo events do not set Envelope.room_id; their room id
-            // lives in the event payload instead.
-            else if (t === 'photo_request') {
+              
+              // 🛠️ FIX: Normalize protobufjs camelCase back to snake_case for the UI
+              if (decodedPayload.mediaUrl) decodedPayload.media_url = decodedPayload.mediaUrl;
+              if (decodedPayload.mediaType) decodedPayload.media_type = decodedPayload.mediaType;
+              if (decodedPayload.replyTo) decodedPayload.reply_to = decodedPayload.replyTo;
+              
+            } else if (t === 'photo_request' && PhotoRequestProto) {
               decodedPayload = PhotoRequestProto.decode(envelope.payload);
-            }
-            else if (t === 'photo_response') {
+            } else if (t === 'photo_response' && PhotoResponseProto) {
               decodedPayload = PhotoResponseProto.decode(envelope.payload);
-            }
-            else if (t === 'photo_ready') {
+            } else if (t === 'photo_ready' && PhotoReadyProto) {
               decodedPayload = PhotoReadyProto.decode(envelope.payload);
-            }
-            // Receipt-like events use the Receipt proto
-            else if (t === 'message_read' || t === 'message_delivered_receipt' || t === 'message_receipt' || t === 'receipt') {
+            } else if (t === 'message_read' || t === 'message_delivered_receipt' || t === 'message_receipt' || t === 'receipt') {
               if (ReceiptProto) {
                 try {
                   decodedPayload = ReceiptProto.decode(envelope.payload);
@@ -88,9 +94,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
                   decodedPayload = envelope.payload;
                 }
               }
-            }
-            // Fallback: try ChatMessage decode, otherwise leave raw bytes
-            else {
+            } else {
               try {
                 decodedPayload = ChatMessageProto.decode(envelope.payload);
               } catch (e) {
@@ -103,12 +107,12 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Expose both the decoded payload and the raw envelope for consumers
         setLastMessage({
           ...envelope,
           payload: decodedPayload,
         });
 
+        // Optional UX: Trigger notification only for standard chat messages
         if (envelope.type === 'chat_message') {
           window.dispatchEvent(new CustomEvent('zquab_notification', { 
             detail: { message: 'New Message! 💬' } 
@@ -142,9 +146,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // useCallback (stable reference) — an unstable sendMessage here caused the
-  // WebSocketContext value to change on every render, which made consumer
-  // effects that depend on it re-fire for messages they'd already processed.
   const sendMessage = useCallback((type: string, payload?: any, roomId?: string, to?: string, id?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('Cannot send message: WebSocket is not open');
@@ -154,21 +155,21 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     try {
       let payloadBytes: any = new Uint8Array();
       
-      // 🛠️ Encode the inner payload if we are sending text
-      if (type === 'chat_message' && payload?.text) {
-        const chatMsg = ChatMessageProto.create({ text: payload.text });
+      // 🛠️ FIX: Safely map UI snake_case fields back into Protobuf camelCase structure
+      if (type === 'chat_message' && payload) {
+        const chatMsg = ChatMessageProto.create({ 
+          text: payload.text || '',
+          mediaUrl: payload.media_url || payload.mediaUrl || '',
+          mediaType: payload.media_type || payload.mediaType || '',
+          replyTo: payload.reply_to || payload.replyTo || ''
+        });
         payloadBytes = ChatMessageProto.encode(chatMsg).finish();
       }
 
-      // 🛠️ Create and encode the outer envelope
-      // NOTE: protobufjs parses chat.proto without `keepCase`, so fields are
-      // exposed camelCase (`roomId`, not `room_id`) — passing `room_id` here
-      // was silently dropped, meaning outgoing friend messages never carried
-      // a room id at all.
       const msgId = id || globalThis.crypto?.randomUUID?.() || `${Date.now()}`;
       const envelope = Envelope.create({
         type,
-        roomId,
+        roomId, // Protobufjs uses camelCase here
         to,
         payload: payloadBytes,
         ts: Date.now(),
@@ -188,8 +189,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Memoize the context value — a fresh object every render caused every
-  // consumer to re-render (and re-fire effects) on unrelated WS traffic.
   const value = useMemo(
     () => ({ isConnected, sendMessage, lastMessage }),
     [isConnected, sendMessage, lastMessage]

@@ -10,6 +10,7 @@ interface Props {
   imageUrl?: string;
   onImageClick?: (url: string) => void; 
   isUploading?: boolean;
+  isSystem?: boolean;
 }
 
 const isOnlyEmojis = (str: string) => {

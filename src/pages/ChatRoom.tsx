@@ -14,9 +14,6 @@ import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
 const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqeegprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
-// User-authored chat payloads are not trusted image sources. Only URLs served
-// by our configured storage CDN may be embedded as images in DM history/live
-// chat messages. Direct `photo_ready` events are handled separately below.
 const isTrustedStorageImage = (value: unknown): value is string =>
   typeof value === 'string' &&
   STORAGE_CDN_BASE_URL.length > 0 &&
@@ -121,8 +118,6 @@ export default function ChatRoom({
 
   const sentMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // Keeps the IntersectionObserver's callback reading fresh data without
-  // needing `messages` in that effect's own dependency array.
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -184,7 +179,6 @@ export default function ChatRoom({
     } | null>;
   }, [roomId]);
 
-  // 🛠️ FETCH HISTORY & MERGE OPTIMISTIC MESSAGES
   useEffect(() => {
     if (isDevMode) {
       setMessages([
@@ -203,7 +197,7 @@ export default function ChatRoom({
         const myId = (user as any)?.user_id || (user as any)?.id;
 
         const formattedHistory = history.map((msg: any) => {
-          const msgSender = msg.sender_id; // 🛠️ Strictly using sender_id as per backend docs
+          const msgSender = msg.sender_id; 
           const content = msg.content || msg.text || '';
           const imageUrl = isTrustedStorageImage(content) ? content : undefined;
           return {
@@ -211,15 +205,11 @@ export default function ChatRoom({
             content: imageUrl ? '' : content,
             created_at: msg.created_at || msg.ts || new Date().toISOString(),
             isOwn: Boolean(msgSender && myId && msgSender === myId),
-            status: msg.status || 'delivered', // backend computes read/delivered/sent per message
+            status: msg.status || 'delivered',
             imageUrl
           };
         });
 
-        // 🛠️ SESSION RECONCILIATION: Grab optimistic messages that haven't hit DB yet.
-        // NOTE: can't match by id here — history ids are server BIGSERIAL
-        // integers, optimistic ids are client-generated UUIDs; they can
-        // never be equal. Match by sender+content+time-proximity instead.
         const storedOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
 
         const pendingOpts = storedOpts.filter((opt: any) => {
@@ -254,21 +244,11 @@ export default function ChatRoom({
     if (isConnected) {
       sendMessage('join_room', undefined, roomId);
     }
-
-    // No leave_room here: register() already auto-joins every active room for
-    // the whole connection lifetime (loadUserRooms), so this cleanup used to
-    // actively unsubscribe you from the room's live broadcasts the moment you
-    // switched to another conversation (or on any reconnect blip) — meaning
-    // new messages in that room went undelivered until you reopened it.
   }, [roomId, isConnected, isDevMode, user]);
 
-  // 🛠️ WEBSOCKET MESSAGE HANDLER
   useEffect(() => {
     if (isDevMode || !lastMessage) return;
 
-    // send_confirm carries no room_id (it's a direct ack to the sender), so
-    // it must be handled before the room-id match check below, and its real
-    // wire type is 'send_confirm' — not the old 'message_sent_confirm' name.
     if (lastMessage.type === 'send_confirm') {
       return;
     }
@@ -281,7 +261,7 @@ export default function ChatRoom({
     if (belongsToRoom) {
       if (lastMessage.type === 'photo_request') {
         setIncomingPhotoRequest(true);
-        setMessages(prev => [...prev, { id: `sys-pr-${Date.now()}`, content: 'Your friend wants to see a photo of you.', isSystem: true, isOwn: false }]);
+        // 🛠️ FIX: Removed the redundant chat message bubble addition here!
         return;
       }
 
@@ -289,7 +269,14 @@ export default function ChatRoom({
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
         const accepted = typeof lastMessage.accepted === 'boolean' ? lastMessage.accepted : Boolean(lastMessage.payload?.accepted);
-        setMessages(prev => [...prev, { id: `sys-prr-${Date.now()}`, content: accepted ? 'Your friend accepted — you can send the photo now.' : 'Your friend declined the photo request.', isSystem: true, isOwn: false }]);
+        
+        // 🛠️ FIX: Updated to clean, uppercase system styling commands
+        setMessages(prev => [...prev, { 
+          id: `sys-prr-${Date.now()}`, 
+          content: accepted ? `${friendName.toUpperCase()} ACCEPTED — WAITING FOR THE PHOTO...` : `${friendName.toUpperCase()} DECLINED THE PHOTO REQUEST.`, 
+          isSystem: true, 
+          isOwn: false 
+        }]);
         return;
       }
 
@@ -322,19 +309,18 @@ export default function ChatRoom({
         const parsedTs = Number(lastMessage.ts);
         const tsMs = Number.isFinite(parsedTs) ? parsedTs : Date.now();
         const myId = (user as any)?.user_id || (user as any)?.id;
-        const msgSender = lastMessage.sender_id || lastMessage.from; // Fallback to from for live socket if needed
+        const msgSender = lastMessage.sender_id || lastMessage.from; 
         const isOwn = Boolean(msgSender && myId && msgSender === myId);
         
         const messageText = lastMessage.payload?.text || '';
         const mediaUrl = lastMessage.payload?.mediaUrl || lastMessage.payload?.media_url;
-        // Current DM deployments may place the persisted image URL in `text`;
-        // newer payloads use media_url/media_type. Both are safe only when the
-        // URL belongs to our configured storage origin.
+        
         const imageUrl = isTrustedStorageImage(mediaUrl)
           ? mediaUrl
           : isTrustedStorageImage(messageText)
             ? messageText
             : undefined;
+            
         const newMsg = {
           id: lastMessage.id,
           content: imageUrl ? '' : messageText,
@@ -347,9 +333,6 @@ export default function ChatRoom({
         setMessages(prev => {
           if (prev.some(message => message.id === newMsg.id)) return prev;
 
-          // A DM broadcast can arrive before the /uploaded REST response. In
-          // that case, turn the pending local preview into the persisted message
-          // instead of displaying the photo twice.
           const pendingPhoto = isOwn && newMsg.imageUrl
             ? prev.find(message => message.isUploading)
             : undefined;
@@ -360,7 +343,6 @@ export default function ChatRoom({
         });
         setIsPartnerTyping(false);
         
-        // 🛠️ FIXED: Send exact 'read' event as requested by backend if the message isn't ours
         if (!isOwn && isConnected) {
           sendMessage('read', undefined, roomId);
         }
@@ -383,20 +365,14 @@ export default function ChatRoom({
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
       }
       else if (lastMessage.type === 'read') {
-        // Broadcast to the whole room (including the reader themselves) —
-        // only upgrade statuses when the read came from the OTHER person,
-        // otherwise this is just an echo of our own read receipt.
         const myId = (user as any)?.user_id || (user as any)?.id;
         const readerId = lastMessage.sender_id || lastMessage.from;
         if (readerId && myId && readerId !== myId) {
-          // No specific message_id is sent — 'read' is a watermark, so mark
-          // every one of our own messages read. This is the only place any
-          // message's status ever advances past its initial 'sent'/'delivered'.
           setMessages(prev => prev.map(m => (m.isOwn && m.status !== 'read') ? { ...m, status: 'read' } : m));
         }
       }
     }
-  }, [lastMessage, roomId, isDevMode, user, isConnected, sendMessage, clearPhotoRequestTimeout]);
+  }, [lastMessage, roomId, isDevMode, user, isConnected, sendMessage, clearPhotoRequestTimeout, friendName]);
 
   useEffect(() => {
     if (isDevMode) return;
@@ -421,7 +397,7 @@ export default function ChatRoom({
                 content: imageUrl ? '' : content,
                 created_at: msg.created_at || msg.ts || new Date().toISOString(),
                 isOwn: Boolean(msgSender && myId && msgSender === myId),
-                status: msg.status || 'delivered', // backend computes read/delivered/sent per message
+                status: msg.status || 'delivered',
                 imageUrl
               };
             });
@@ -441,8 +417,6 @@ export default function ChatRoom({
     return () => {
       if (topObserverRef.current) observer.unobserve(topObserverRef.current);
     };
-    // messages intentionally excluded — read via messagesRef instead, so this
-    // observer isn't torn down/recreated on every single new message.
   }, [hasMore, loadingMore, loading, roomId, isDevMode, user]);
 
   const handleTyping = () => {
@@ -486,12 +460,9 @@ export default function ChatRoom({
     
     setMessages(prev => [...prev, optimisticMsg]);
     
-    // 🛠️ SESSION OPTIMISTIC SAVE: Instantly save to memory so it survives a 3-second refresh!
     const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
     sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
 
-    // The chat_message broadcast excludes the sending socket, so this tab's
-    // own room list would otherwise never see this message move it to the top.
     if (roomId) bumpOwnMessage(roomId, text);
     
     setTimeout(() => {
@@ -520,7 +491,8 @@ export default function ChatRoom({
       photoRequestTimeoutRef.current = window.setTimeout(() => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        setMessages(prev => [...prev, { id: `sys-pr-timeout-${Date.now()}`, content: 'Your friend did not respond to the photo request.', isSystem: true, isOwn: false }]);
+        // 🛠️ FIX: Updated formatting for timeout response
+        setMessages(prev => [...prev, { id: `sys-pr-timeout-${Date.now()}`, content: `${friendName.toUpperCase()} DIDN'T RESPOND.`, isSystem: true, isOwn: false }]);
       }, 30_000);
     } catch (error) {
       setPhotoRequestBusy(false);
@@ -575,8 +547,6 @@ export default function ChatRoom({
       const uploaded = await sharePhoto(webpFile);
       URL.revokeObjectURL(localPreviewUrl);
 
-      // DM uploads become durable chat messages. Render the returned canonical
-      // message immediately; the matching websocket broadcast is deduped by id.
       if (uploaded?.message_id && isTrustedStorageImage(uploaded.url)) {
         const messageId = String(uploaded.message_id);
         sentMessageIdsRef.current.add(messageId);
@@ -589,8 +559,6 @@ export default function ChatRoom({
           status: 'delivered',
         } : msg));
       } else {
-        // Stranger-room delivery uses `photo_ready`; keep the local preview
-        // visible after the upload while waiting for that one-time event.
         setMessages((prev) => prev.map((msg) => msg.id === tempId ? { ...msg, isUploading: false } : msg));
       }
       if (roomId) bumpOwnMessage(roomId, 'Photo');
@@ -676,8 +644,6 @@ export default function ChatRoom({
         <div className="flex items-center gap-2 min-w-0">
           <button 
             onClick={() => {
-              // Explicit close — clear the resume-on-return memory so
-              // navigating back to a bare /home shows the list, not this chat.
               sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
               navigate('/home');
             }} 
@@ -739,6 +705,7 @@ export default function ChatRoom({
                 imageUrl={(msg as any).imageUrl}
                 onImageClick={handleImageClick}
                 isUploading={msg.isUploading}
+                isSystem={(msg as any).isSystem} // 🛠️ FIX: Crucially added this prop!
               />
             ))}
             
@@ -758,8 +725,9 @@ export default function ChatRoom({
               exit={{ opacity: 0, y: 10 }}
               className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-2xl border border-[var(--border-color)] bg-[var(--card)]/95 p-4 shadow-2xl backdrop-blur-md z-30"
             >
+              {/* 🛠️ FIX: Made the request text beautifully generic */}
               <p className="text-sm font-medium text-[var(--text-main)] mb-3 flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-[#3B82F6]" /> Your friend wants to see a photo of you.
+                <ImageIcon className="w-4 h-4 text-[#3B82F6]" /> {friendName} requested a photo.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={handleDeclinePhotoRequest} className="flex items-center justify-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--background)] py-2.5 font-medium text-[var(--text-muted)] transition-all hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30">
