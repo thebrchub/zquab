@@ -38,7 +38,6 @@ export class ChatClient {
   private userId: string | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: number | null = null;
-  private friendPresenceTimer: number | null = null; // 🛠️ NEW: Timer for friend disconnect tracking
   private isShuttingDown = false;
   private knownMessageIds = new Set<string>();
   private callbacks: ChatCallbackOptions;
@@ -55,7 +54,7 @@ export class ChatClient {
   private FriendAcceptedProto: protobuf.Type | null = null;
   private FriendRequestProto: protobuf.Type | null = null;
 
-  // We no longer need to rely on this heavily, but keeping it for compatibility
+  // The local user's country code, sent to the backend during /match/enter
   private locationCode: string | null = null;
 
   constructor(callbacks: ChatCallbackOptions) {
@@ -75,7 +74,39 @@ export class ChatClient {
   }
 
   private async detectLocation() {
-    // 🛠️ FIXED: Removed 3rd-party IP lookup. We now rely strictly on DB profile data.
+    try {
+      // 1. Attempt to fetch the registered user's profile to get their DB country
+      const res = await fetch(`${API_BASE}/api/v1/users/me`, { credentials: 'include' });
+      if (res.ok) {
+        const profile = await res.json();
+        // If they are a registered user and have a country saved, use it!
+        if (profile && profile.country && !profile.is_guest) {
+          this.locationCode = profile.country;
+          this.callbacks.onLocationDetected?.({ name: profile.country, code: profile.country });
+          return; // Exit early, no need for the IP API!
+        }
+      }
+    } catch (e) {
+      // Silently catch network/auth errors and proceed to the guest fallback
+    }
+
+    // 2. Fallback to IP API for Guests (or if the user profile fetch failed)
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      if (res.ok) {
+        const data = await res.json();
+        this.locationCode = data.country || null;
+        this.callbacks.onLocationDetected?.({
+          name: data.country_name || 'Unknown country',
+          code: data.country || '',
+        });
+        return;
+      }
+    } catch (e) {
+      // Ignore IP API errors
+    }
+
+    // 3. Complete failure fallback
     this.locationCode = null;
     this.callbacks.onLocationDetected?.(null);
   }
@@ -158,14 +189,13 @@ export class ChatClient {
             const isFriend = Boolean((match as any).isFriend ?? (match as any).is_friend ?? false);
             this.currentRoomId = roomId;
 
-            // 🛠️ ASYNC HANDLER: Fetch true country from database and handle friend presence
+            // 🛠️ ASYNC HANDLER: Fetch partner's true country from database as a fallback
             (async () => {
               let partnerLocation = match.partnerLocation as string | undefined;
 
-              // 1. Resolve Country from Profile if missing
+              // If the backend didn't send a location AND the partner is a registered user
               if ((!partnerLocation || partnerLocation === 'Unknown location' || partnerLocation.trim() === '') && partnerUsername) {
                 try {
-                  // Ensure this endpoint matches your backend profile route
                   const res = await fetch(`${API_BASE}/api/v1/users/${partnerUsername}`, { credentials: 'include' });
                   if (res.ok) {
                     const profile = await res.json();
@@ -176,16 +206,11 @@ export class ChatClient {
                 }
               }
 
-              // 2. Race condition check: Ensure the user didn't hit "Next" while we were fetching
+              // Race condition check: Ensure the user didn't hit "Next" while we were fetching
               if (this.currentRoomId !== roomId) return;
 
               this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername, isFriend);
               this.callbacks.onStatusChange('connected');
-
-              // 3. Friend Phantom Connection Fix: Start the heartbeat tracker!
-              if (isFriend && partnerUsername) {
-                this.startFriendPresenceCheck(partnerUsername, roomId);
-              }
             })();
             break;
           }
@@ -219,9 +244,7 @@ export class ChatClient {
             if (roomId !== this.currentRoomId) break;
 
             this.currentRoomId = null;
-            this.stopFriendPresenceCheck(); // 🛠️ Clear heartbeat
             this.callbacks.onStatusChange('disconnected');
-            this.callbacks.onSystemMessage('The stranger disconnected.');
             this.callbacks.onDisconnected('Stranger disconnected');
             break;
           }
@@ -231,9 +254,7 @@ export class ChatClient {
             if (closedRoomId && closedRoomId !== this.currentRoomId) break;
 
             this.currentRoomId = null;
-            this.stopFriendPresenceCheck(); // 🛠️ Clear heartbeat
             this.callbacks.onStatusChange('disconnected');
-            this.callbacks.onSystemMessage('Chat room closed.');
             this.callbacks.onDisconnected('Room closed');
             break;
           }
@@ -306,40 +327,6 @@ export class ChatClient {
     };
   }
 
-  // 🛠️ NEW: Heartbeat to catch when a friend disconnects/goes offline
-  private startFriendPresenceCheck(username: string, roomId: string) {
-    this.stopFriendPresenceCheck();
-    this.friendPresenceTimer = window.setInterval(async () => {
-      if (this.currentRoomId !== roomId) {
-        this.stopFriendPresenceCheck();
-        return;
-      }
-      try {
-        const response = await fetch(`${API_BASE}/api/v1/users/${username}`, { credentials: 'include' });
-        if (response.ok) {
-          const profile = await response.json();
-          // If backend marks them offline, they closed the app! Disconnect!
-          if (profile && profile.is_online === false) {
-            if (this.currentRoomId === roomId) {
-              this.currentRoomId = null;
-              this.callbacks.onStatusChange('disconnected');
-              this.callbacks.onSystemMessage('Your friend left the chat.');
-              this.callbacks.onDisconnected('Friend left');
-              this.stopFriendPresenceCheck();
-            }
-          }
-        }
-      } catch (e) { /* Ignore temporary network glitches */ }
-    }, 10000); // Check every 10 seconds
-  }
-
-  private stopFriendPresenceCheck() {
-    if (this.friendPresenceTimer !== null) {
-      window.clearInterval(this.friendPresenceTimer);
-      this.friendPresenceTimer = null;
-    }
-  }
-
   private scheduleReconnect() {
     this.reconnectAttempts += 1;
     const delay = Math.min(3000, 500 + this.reconnectAttempts * 500);
@@ -359,6 +346,7 @@ export class ChatClient {
   }
 
   async enterMatch() {
+    // 🛠️ The locationCode is now securely fetched from either the DB or the IP API!
     const response = await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
     const matchedRoomId = typeof (response as any)?.room_id === 'string' ? (response as any).room_id : null;
     const matchedPartnerUsername = typeof (response as any)?.partner_username === 'string' ? (response as any).partner_username : undefined;
@@ -385,7 +373,6 @@ export class ChatClient {
   }
 
   leaveQueueSilently(keepalive = false) {
-    this.stopFriendPresenceCheck(); // Clean up heartbeat
     fetch(`${API_BASE}/api/v1/match/leave`, {
       method: 'POST',
       credentials: 'include',
@@ -464,7 +451,6 @@ export class ChatClient {
   }
 
   async skipAndRequeue(currentRoomId: string) {
-    this.stopFriendPresenceCheck(); // Clean up heartbeat
     await this.sendMatchAction(currentRoomId, 'skip');
     this.currentRoomId = null;
     await this.enterMatch();
@@ -474,7 +460,6 @@ export class ChatClient {
     if (!this.currentRoomId) {
       return;
     }
-    this.stopFriendPresenceCheck(); // Clean up heartbeat
     await this.sendMatchAction(this.currentRoomId, 'block');
     this.currentRoomId = null;
     this.callbacks.onStatusChange('disconnected');
@@ -528,7 +513,6 @@ export class ChatClient {
 
   shutdown() {
     this.isShuttingDown = true;
-    this.stopFriendPresenceCheck(); // Clean up heartbeat
     this.clearReconnectTimer();
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.close();
