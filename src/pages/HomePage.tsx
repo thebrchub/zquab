@@ -7,6 +7,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import ChatRoom from './ChatRoom'; 
 
+// 🛠️ NEW: Added CDN URL detector to intercept raw image links in previews
+const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
+
+const getPreviewText = (preview?: string) => {
+  if (!preview) return 'No messages yet';
+  if (typeof preview === 'string' && preview.startsWith(STORAGE_CDN_BASE_URL)) {
+    return '📷 Photo';
+  }
+  return preview;
+};
+
 interface FriendRequest {
   request_id: number;
   user_id: string;
@@ -136,9 +147,6 @@ export default function HomePage() {
         <header className="pt-safe pb-4 px-4 bg-[var(--card)] border-b border-[var(--border-color)] flex-shrink-0 z-20">
           <div className="flex items-center justify-between mt-4 mb-6">
             <h1 className="text-2xl font-black text-[var(--text-main)] tracking-tight">Messages</h1>
-            {/* <button className="w-10 h-10 rounded-full bg-[var(--background)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-main)] active:scale-95 transition-transform">
-              <Search className="w-5 h-5" />
-            </button> */}
           </div>
 
           <div className="flex p-1 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
@@ -202,8 +210,7 @@ export default function HomePage() {
                           key={room.room_id} 
                           onClick={() => handleRoomClick(room, partnerName, partnerUsername, partner?.avatar_url, partner?.is_online)}
                           className={`p-4 transition-colors flex items-center gap-4 cursor-pointer ${
-                            
-isSelected ? 'bg-[var(--card)] border-l-4 border-l-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
+                            isSelected ? 'bg-[var(--card)] border-l-4 border-l-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
                           }`}
                         >
                           <div className="relative flex-shrink-0">
@@ -231,8 +238,9 @@ isSelected ? 'bg-[var(--card)] border-l-4 border-l-[#3B82F6]' : 'bg-[var(--backg
                               </span>
                             </div>
                             <div className="flex justify-between items-center gap-2">
+                              {/* 🛠️ THE FIX: Render formatted preview using getPreviewText */}
                               <p className={`text-sm truncate ${room.unread_count > 0 ? 'text-[var(--text-main)] font-semibold' : 'text-[var(--text-muted)]'}`}>
-                                {room.last_message_preview || 'No messages yet'}
+                                {getPreviewText(room.last_message_preview)}
                               </p>
                               {room.unread_count > 0 && (
                                 <span className="bg-[#3B82F6] text-white text-[11px] font-bold min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full flex-shrink-0 shadow-sm">

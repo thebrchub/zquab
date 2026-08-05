@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
 import { useAuth } from '../context/AuthContext';
+import { useWebSocket } from '../context/WebSocketContext'; // 🛠️ NEW: Import global socket
 import UserCard from '../components/UserCard';
 import PaginationLoader from '../components/PaginationLoader';
 import { ALL_COUNTRIES } from '../constants/countries'; 
@@ -12,7 +13,7 @@ import {
   LogOut, UserPlus, Search, Check, Share2, CheckCircle2, Lock, RefreshCw 
 } from 'lucide-react';
 
-// 🛠️ NEW: Import DiceBear for the Profile page
+// Import DiceBear for the Profile page
 import { createAvatar } from '@dicebear/core';
 import { lorelei } from '@dicebear/collection';
 
@@ -22,6 +23,7 @@ type Tab = 'friends' | 'requests' | 'search' | 'blocked';
 export default function Profile() {
   const navigate = useNavigate();
   const { user: authUser, logout: logoutUser } = useAuth(); 
+  const { lastMessage } = useWebSocket(); // 🛠️ NEW: Hook into global socket messages
   
   // --------------------------------------------------------
   // 1. PROFILE STATE
@@ -43,16 +45,13 @@ export default function Profile() {
   const [isCountryLocked, setIsCountryLocked] = useState(true); 
   const [isDetectingCountry, setIsDetectingCountry] = useState(false);
 
-  // 🛠️ NEW: Avatar Generation State
+  // Avatar Generation State
   const [zAvatarRequested, setZAvatarRequested] = useState(false);
   const [avatarVariant, setAvatarVariant] = useState(0);
 
-  // 🛠️ NEW: Live Preview Logic
+  // Live Preview Logic
   const avatarPreview = useMemo(() => {
-    // If they haven't requested a new one, show their existing avatar or null
     if (!zAvatarRequested) return profile?.avatar_url || null;
-    
-    // Otherwise, generate a fresh live preview
     if (!username) return null;
     return createAvatar(lorelei, {
       seed: `${username}-${avatarVariant}`,
@@ -169,6 +168,28 @@ export default function Profile() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // 🛠️ NEW: Silent background refetch listener!
+  useEffect(() => {
+    if (!lastMessage) return;
+    try {
+      const type = (lastMessage as any).type;
+      if (
+        type === 'friend_request' || 
+        type === 'friend_request_received' || 
+        type === 'friend_accepted' || 
+        type === 'friend_removed'
+      ) {
+        // Refetch silently if we aren't actively searching
+        if (activeTab !== 'search') {
+          fetchNetworkData(true);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to parse global socket event", error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessage]); 
+
   // --------------------------------------------------------
   // 4. HANDLERS
   // --------------------------------------------------------
@@ -177,10 +198,9 @@ export default function Profile() {
     setSaving(true);
     setError(null);
     try {
-      const payload: any = { bio, gender, country };
+      const payload: any = { bio, gender, country, age };
       if (!hasExistingUsername && username) payload.username = username;
       
-      // 🛠️ NEW: Inject the newly generated avatar into the payload if requested
       let newAvatarUrl = profile?.avatar_url;
       if (zAvatarRequested) {
         newAvatarUrl = createAvatar(lorelei, {
@@ -198,7 +218,7 @@ export default function Profile() {
       if (updated.username) setHasExistingUsername(true);
       
       setIsEditing(false); 
-      setZAvatarRequested(false); // Reset the generator state after saving
+      setZAvatarRequested(false);
     } catch (err: any) {
       setError(err.message || 'Failed to update profile');
     } finally {
@@ -298,7 +318,7 @@ export default function Profile() {
                 <button 
                   onClick={() => {
                     setIsEditing(false);
-                    setZAvatarRequested(false); // Cancel avatar generation if they exit edit mode
+                    setZAvatarRequested(false); 
                   }} 
                   className="p-2 bg-[var(--background)] rounded-full hover:bg-[var(--border-color)] transition-colors"
                 >
@@ -308,7 +328,6 @@ export default function Profile() {
               
               {error && <div className="p-3 bg-red-500/10 text-red-500 font-medium rounded-xl text-sm mb-4">{error}</div>}
 
-              {/* 🛠️ UPDATED: zAvatar Generation UI in Edit Mode */}
               <div className="flex flex-col items-center justify-center mb-6">
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[var(--background)] border-2 border-[var(--border-color)] flex items-center justify-center overflow-hidden shadow-sm transition-all duration-300">
                   {avatarPreview ? (

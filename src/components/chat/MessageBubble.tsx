@@ -45,6 +45,8 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
           <img 
             src={imageUrl} 
             alt="Shared photo" 
+            draggable={false} 
+            onDragStart={(e) => e.preventDefault()} 
             onClick={!isUploading ? () => onImageClick?.(imageUrl) : undefined}
             className={`w-full h-auto object-cover shadow-sm border border-[var(--border-color)] transition-all duration-300 ${
               isUploading 

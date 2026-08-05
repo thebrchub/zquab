@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usersApi } from '../api/users';
 import { friendsApi } from '../api/friends';
+import { useWebSocket } from '../context/WebSocketContext'; // 🛠️ NEW: Hook up global context
 import UserCard from '../components/UserCard';
 import PaginationLoader from '../components/PaginationLoader';
-import { Users, UserPlus, ShieldBan, Search, Check, X, Loader2 } from 'lucide-react';
+import { Users, UserPlus, Search, Check, X, Loader2 } from 'lucide-react';
 
 type Tab = 'friends' | 'requests' | 'blocked' | 'search';
 
 export default function FriendsHub() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
+  const { lastMessage } = useWebSocket(); // 🛠️ NEW: Use context
   
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,7 +28,7 @@ export default function FriendsHub() {
         setLoading(true);
         setOffset(0);
         setHasMore(true);
-        setData([]); // 🛠️ FIX: Instantly wipe the old data so it never flashes!
+        setData([]); 
       }
       
       const currentOffset = reset ? 0 : offset;
@@ -72,6 +74,28 @@ export default function FriendsHub() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // 🛠️ NEW: Silent background refetch listener
+  useEffect(() => {
+    if (!lastMessage) return;
+    try {
+      const type = (lastMessage as any).type;
+      if (
+        type === 'friend_request' || 
+        type === 'friend_request_received' || 
+        type === 'friend_accepted' || 
+        type === 'friend_removed'
+      ) {
+        // Automatically sync the UI in the background
+        if (activeTab !== 'search') {
+          fetchData(true);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to parse global socket event", error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessage]);
+
   const handleAction = async (action: () => Promise<void>, username: string) => {
     try {
       await action();
@@ -91,7 +115,7 @@ export default function FriendsHub() {
           { id: 'friends', icon: Users, label: 'My Friends' },
           { id: 'requests', icon: UserPlus, label: 'Requests' },
           { id: 'search', icon: Search, label: 'Find Friends' },
-          { id: 'blocked', icon: ShieldBan, label: 'Blocked' }
+          // { id: 'blocked', icon: ShieldBan, label: 'Blocked' }
         ].map(tab => (
           <button
             key={tab.id}

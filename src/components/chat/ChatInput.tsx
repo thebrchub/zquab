@@ -27,16 +27,27 @@ export default function ChatInput({
   // 🛠️ NEW: Ref to control textarea height dynamically
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
-    if (onTyping) onTyping();
+  const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
-    // 🛠️ Auto-resize logic: expand height as user types, up to a max limit
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'; // Reset to calculate true height
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  let newValue = e.target.value;
+
+  // 🛠️ SCRUBBER: Instantly wipe out any dropped/pasted Supabase URLs
+  if (newValue.includes(STORAGE_CDN_BASE_URL)) {
+    // This regex cleanly removes the base URL and the unique image ID attached to it
+    newValue = newValue.replace(new RegExp(STORAGE_CDN_BASE_URL + '\\S*', 'g'), '');
+  }
+
+  setText(newValue);
+  
+  if (onTyping) onTyping();
+
+  // 🛠️ Auto-resize logic: expand height as user types, up to a max limit
+  if (textareaRef.current) {
+    textareaRef.current.style.height = 'auto'; // Reset to calculate true height
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+  }
+};
 
   // 🛠️ NEW: Keydown handler for Enter vs Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

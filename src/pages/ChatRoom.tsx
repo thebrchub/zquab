@@ -12,7 +12,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
-// Change "qeegprlu" to "qegeprlu"
 const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
 const isTrustedStorageImage = (value: unknown): value is string =>
@@ -123,6 +122,24 @@ export default function ChatRoom({
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const handleImageClick = useCallback((url: string) => setViewingImage(url), []);
+
+  // 🛠️ THE FIX: Native mobile back gesture interceptor
+  useEffect(() => {
+    // Push a dummy state so the swipe gesture has something to pop
+    window.history.pushState(null, '', window.location.href);
+
+    const handleNativeBack = () => {
+      // Clear the storage so /home doesn't bounce you back here
+      sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
+      // Force navigation directly to /home
+      navigate('/home', { replace: true });
+    };
+
+    window.addEventListener('popstate', handleNativeBack);
+    return () => {
+      window.removeEventListener('popstate', handleNativeBack);
+    };
+  }, [navigate]);
 
   const clearPhotoRequestTimeout = useCallback(() => {
     if (photoRequestTimeoutRef.current !== null) {
@@ -262,7 +279,6 @@ export default function ChatRoom({
     if (belongsToRoom) {
       if (lastMessage.type === 'photo_request') {
         setIncomingPhotoRequest(true);
-        // 🛠️ FIX: Removed the redundant chat message bubble addition here!
         return;
       }
 
@@ -271,7 +287,6 @@ export default function ChatRoom({
         setPhotoRequestBusy(false);
         const accepted = typeof lastMessage.accepted === 'boolean' ? lastMessage.accepted : Boolean(lastMessage.payload?.accepted);
         
-        // 🛠️ FIX: Updated to clean, uppercase system styling commands
         setMessages(prev => [...prev, { 
           id: `sys-prr-${Date.now()}`, 
           content: accepted ? `${friendName.toUpperCase()} ACCEPTED — WAITING FOR THE PHOTO...` : `${friendName.toUpperCase()} DECLINED THE PHOTO REQUEST.`, 
@@ -492,7 +507,6 @@ export default function ChatRoom({
       photoRequestTimeoutRef.current = window.setTimeout(() => {
         clearPhotoRequestTimeout();
         setPhotoRequestBusy(false);
-        // 🛠️ FIX: Updated formatting for timeout response
         setMessages(prev => [...prev, { id: `sys-pr-timeout-${Date.now()}`, content: `${friendName.toUpperCase()} DIDN'T RESPOND.`, isSystem: true, isOwn: false }]);
       }, 30_000);
     } catch (error) {
@@ -706,7 +720,7 @@ export default function ChatRoom({
                 imageUrl={(msg as any).imageUrl}
                 onImageClick={handleImageClick}
                 isUploading={msg.isUploading}
-                isSystem={(msg as any).isSystem} // 🛠️ FIX: Crucially added this prop!
+                isSystem={(msg as any).isSystem}
               />
             ))}
             
@@ -726,7 +740,6 @@ export default function ChatRoom({
               exit={{ opacity: 0, y: 10 }}
               className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm rounded-2xl border border-[var(--border-color)] bg-[var(--card)]/95 p-4 shadow-2xl backdrop-blur-md z-30"
             >
-              {/* 🛠️ FIX: Made the request text beautifully generic */}
               <p className="text-sm font-medium text-[var(--text-main)] mb-3 flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-[#3B82F6]" /> {friendName} requested a photo.
               </p>
