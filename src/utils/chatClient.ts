@@ -8,7 +8,7 @@ type ChatCallbackOptions = {
   onStatusChange: (status: Status) => void;
   onIncomingMessage: (message: ChatMessage) => void;
   onSystemMessage: (text: string) => void;
-  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string, partnerUsername?: string, isFriend?: boolean) => void;
+  onMatchFound: (roomId: string, partnerId: string, partnerLocation?: string, partnerUsername?: string, isFriend?: boolean, partnerAvatar?: string) => void;
   onDisconnected: (reason: string) => void;
   onSocketOpen?: () => void;
   onSocketClose?: (code: number, reason: string) => void;
@@ -63,7 +63,7 @@ export class ChatClient {
 
   async start() {
     try {
-      this.detectLocation();
+      await this.detectLocation(); // 🛠️ ADDED AWAIT: Ensures location is ready before connecting!
       await this.loadProtos();
       await this.ensureGuest();
       this.connect();

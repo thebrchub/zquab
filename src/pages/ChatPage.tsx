@@ -75,6 +75,7 @@ export default function ChatPage() {
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
   const [partnerUsername, setPartnerUsername] = useState<string | undefined>(undefined);
+  const [partnerAvatar, setPartnerAvatar] = useState<string | undefined>(undefined); // 🛠️ NEW: Added avatar state
   const [isMatchWithFriend, setIsMatchWithFriend] = useState(false);
   const [partnerGender, setPartnerGender] = useState<string | undefined>(undefined);
   const [friendRequestSent, setFriendRequestSent] = useState(false);
@@ -114,6 +115,7 @@ export default function ChatPage() {
       setPartnerCountry({ name: 'United States', code: 'US' });
       setPartnerUsername(type === 'registered' ? 'shadow_ninja' : undefined);
       setPartnerGender(type === 'registered' ? 'Male' : undefined);
+      setPartnerAvatar(undefined);
       setFriendRequestSent(false);
     }, 1500);
   };
@@ -157,9 +159,12 @@ export default function ChatPage() {
         console.log('[Chat System]:', text);
         setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]);
       },
-      onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername, isFriend) => {
+      // 🛠️ FIX: Added partnerAvatar to the destructuring here
+      onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername, isFriend, partnerAvatar) => {
         setPartnerUsername(partnerUsername);
         setIsMatchWithFriend(Boolean(isFriend));
+        setPartnerAvatar(partnerAvatar); // 🛠️ FIX: Save it to state
+
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
           return;
@@ -297,6 +302,7 @@ export default function ChatPage() {
     setPhotoRequestBusy(false);
     setIsPartnerTyping(false);
     setIsMatchWithFriend(false);
+    setPartnerAvatar(undefined); // 🛠️ FIX: Clear avatar state on next match
     clearPhotoRequestTimeout();
   };
 
@@ -454,6 +460,7 @@ export default function ChatPage() {
                   partnerCountry={partnerCountry} 
                   partnerUsername={partnerUsername}
                   partnerGender={partnerGender}
+                  partnerAvatar={partnerAvatar} // 🛠️ FIX: Passed to mobile connection card
                   onAddFriend={handleAddFriend}
                   friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
                   isAlreadyFriend={isMatchWithFriend}
@@ -731,6 +738,7 @@ export default function ChatPage() {
           partnerCountry={partnerCountry} 
           partnerUsername={partnerUsername}
           partnerGender={partnerGender}
+          partnerAvatar={partnerAvatar} // 🛠️ FIX: Passed to desktop connection card
           onAddFriend={handleAddFriend}
           friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
           isAlreadyFriend={isMatchWithFriend}
