@@ -1,13 +1,18 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import protobuf from 'protobufjs';
 import chatProtoSrc from '../proto/chat.proto?raw';
+import eventsProtoSrc from '../proto/events.proto?raw';
 
 // 🛠️ Parse the protobufs directly from the raw string (same as chatClient.ts)
 const root = new protobuf.Root();
 protobuf.parse(chatProtoSrc, root);
+protobuf.parse(eventsProtoSrc, root);
 const Envelope = root.lookupType('chatpb.Envelope');
 const ChatMessageProto = root.lookupType('chatpb.ChatMessage');
 const ReceiptProto = root.lookupType ? root.lookupType('chatpb.Receipt') : null;
+const PhotoRequestProto = root.lookupType('eventspb.PhotoRequest');
+const PhotoResponseProto = root.lookupType('eventspb.PhotoResponse');
+const PhotoReadyProto = root.lookupType('eventspb.PhotoReady');
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -62,6 +67,17 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             // Common server->client chat message variants contain a ChatMessage
             if (t === 'message_delivered' || t === 'message_sent_confirm' || t === 'chat_message') {
               decodedPayload = ChatMessageProto.decode(envelope.payload);
+            }
+            // Direct photo events do not set Envelope.room_id; their room id
+            // lives in the event payload instead.
+            else if (t === 'photo_request') {
+              decodedPayload = PhotoRequestProto.decode(envelope.payload);
+            }
+            else if (t === 'photo_response') {
+              decodedPayload = PhotoResponseProto.decode(envelope.payload);
+            }
+            else if (t === 'photo_ready') {
+              decodedPayload = PhotoReadyProto.decode(envelope.payload);
             }
             // Receipt-like events use the Receipt proto
             else if (t === 'message_read' || t === 'message_delivered_receipt' || t === 'message_receipt' || t === 'receipt') {

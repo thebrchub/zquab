@@ -120,7 +120,7 @@ export default function Navbar() {
             <img 
               src="/logo.png" 
               alt="zQuab Logo Icon" 
-              className="h-8 sm:h-10 md:h-14 w-auto object-contain hover:scale-105 transition-transform" 
+              className="h-12 sm:h-10 md:h-14 w-auto object-contain hover:scale-105 transition-transform" 
             />
             <span className="font-bold text-xl sm:text-2xl tracking-tight text-[var(--text-main)]">
               zQuab

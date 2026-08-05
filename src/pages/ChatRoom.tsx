@@ -12,6 +12,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
+const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? '';
+
+// User-authored chat payloads are not trusted image sources. Only URLs served
+// by our configured storage CDN may be embedded as images in DM history/live
+// chat messages. Direct `photo_ready` events are handled separately below.
+const isTrustedStorageImage = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  STORAGE_CDN_BASE_URL.length > 0 &&
+  value.startsWith(STORAGE_CDN_BASE_URL);
 
 const compressImageToWebP = (file: File): Promise<File> => {
   return new Promise((resolve, reject) => {
@@ -167,6 +176,12 @@ export default function ChatRoom({
       const text = await uploadedResponse.text();
       throw new Error(text || 'Photo confirmation failed');
     }
+
+    return uploadedResponse.json().catch(() => null) as Promise<{
+      message_id?: string | number;
+      url?: string;
+      created_at?: string;
+    } | null>;
   }, [roomId]);
 
   // 🛠️ FETCH HISTORY & MERGE OPTIMISTIC MESSAGES
@@ -189,13 +204,15 @@ export default function ChatRoom({
 
         const formattedHistory = history.map((msg: any) => {
           const msgSender = msg.sender_id; // 🛠️ Strictly using sender_id as per backend docs
+          const content = msg.content || msg.text || '';
+          const imageUrl = isTrustedStorageImage(content) ? content : undefined;
           return {
             id: msg.id,
-            content: msg.content || msg.text || '',
+            content: imageUrl ? '' : content,
             created_at: msg.created_at || msg.ts || new Date().toISOString(),
             isOwn: Boolean(msgSender && myId && msgSender === myId),
             status: msg.status || 'delivered', // backend computes read/delivered/sent per message
-            imageUrl: msg.image_url || msg.imageUrl
+            imageUrl
           };
         });
 
@@ -258,7 +275,10 @@ export default function ChatRoom({
 
     if (!roomId) return;
 
-    if (lastMessage.room_id === roomId || lastMessage.roomId === roomId) {
+    const eventRoomId = lastMessage.payload?.roomId || lastMessage.payload?.room_id;
+    const belongsToRoom = lastMessage.room_id === roomId || lastMessage.roomId === roomId || eventRoomId === roomId;
+
+    if (belongsToRoom) {
       if (lastMessage.type === 'photo_request') {
         setIncomingPhotoRequest(true);
         setMessages(prev => [...prev, { id: `sys-pr-${Date.now()}`, content: 'Your friend wants to see a photo of you.', isSystem: true, isOwn: false }]);
@@ -276,7 +296,19 @@ export default function ChatRoom({
       if (lastMessage.type === 'photo_ready') {
         const photoUrl = lastMessage.payload?.url || lastMessage.url || '';
         if (photoUrl) {
-          setMessages(prev => [...prev, { id: `msg-photo-${Date.now()}`, content: '', isOwn: false, imageUrl: photoUrl }]);
+          const expiresAt = Number(lastMessage.payload?.expiresAt ?? lastMessage.payload?.expires_at);
+          const photoId = `msg-photo-${Date.now()}`;
+          setMessages(prev => [...prev, { id: photoId, content: '', isOwn: false, imageUrl: photoUrl }]);
+          if (Number.isFinite(expiresAt)) {
+            const delay = expiresAt - Date.now();
+            if (delay <= 0) {
+              setMessages(prev => prev.filter(message => message.id !== photoId));
+            } else {
+              window.setTimeout(() => {
+                setMessages(prev => prev.filter(message => message.id !== photoId));
+              }, delay);
+            }
+          }
         }
         return;
       }
@@ -293,15 +325,32 @@ export default function ChatRoom({
         const msgSender = lastMessage.sender_id || lastMessage.from; // Fallback to from for live socket if needed
         const isOwn = Boolean(msgSender && myId && msgSender === myId);
         
+        const messageText = lastMessage.payload?.text || '';
+        const mediaUrl = lastMessage.payload?.mediaUrl || lastMessage.payload?.media_url;
+        const isImage = lastMessage.payload?.mediaType === 'image' || lastMessage.payload?.media_type === 'image';
         const newMsg = {
           id: lastMessage.id,
-          content: lastMessage.payload?.text || '', 
+          content: messageText,
           created_at: new Date(tsMs).toISOString(),
           isOwn,
-          status: 'delivered'
+          status: 'delivered',
+          imageUrl: isImage && isTrustedStorageImage(mediaUrl) ? mediaUrl : undefined,
         };
         
-        setMessages(prev => [...prev, newMsg]);
+        setMessages(prev => {
+          if (prev.some(message => message.id === newMsg.id)) return prev;
+
+          // A DM broadcast can arrive before the /uploaded REST response. In
+          // that case, turn the pending local preview into the persisted message
+          // instead of displaying the photo twice.
+          const pendingPhoto = isOwn && newMsg.imageUrl
+            ? prev.find(message => message.isUploading)
+            : undefined;
+          if (pendingPhoto) {
+            return prev.map(message => message.id === pendingPhoto.id ? newMsg : message);
+          }
+          return [...prev, newMsg];
+        });
         setIsPartnerTyping(false);
         
         // 🛠️ FIXED: Send exact 'read' event as requested by backend if the message isn't ours
@@ -358,13 +407,15 @@ export default function ChatRoom({
             const myId = (user as any)?.user_id || (user as any)?.id;
             const formattedOlder = olderMessages.map((msg: any) => {
               const msgSender = msg.sender_id; 
+              const content = msg.content || msg.text || '';
+              const imageUrl = isTrustedStorageImage(content) ? content : undefined;
               return {
                 id: msg.id,
-                content: msg.content || msg.text || '',
+                content: imageUrl ? '' : content,
                 created_at: msg.created_at || msg.ts || new Date().toISOString(),
                 isOwn: Boolean(msgSender && myId && msgSender === myId),
                 status: msg.status || 'delivered', // backend computes read/delivered/sent per message
-                imageUrl: msg.image_url || msg.imageUrl
+                imageUrl
               };
             });
 
@@ -509,17 +560,35 @@ export default function ChatRoom({
     };
 
     setMessages((prev) => [...prev, optimisticMsg as any]);
-
-    const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
-    sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
-
-    if (roomId) bumpOwnMessage(roomId, '📷 Photo');
-
     try {
       const webpFile = await compressImageToWebP(file);
-      await sharePhoto(webpFile);
-      setMessages((prev) => prev.map((msg) => msg.id === tempId ? { ...msg, isUploading: false } : msg));
+      if (webpFile.size > 1_000_000) {
+        throw new Error('Photo must be 1MB or smaller. Please choose a smaller image.');
+      }
+      const uploaded = await sharePhoto(webpFile);
+      URL.revokeObjectURL(localPreviewUrl);
+
+      // DM uploads become durable chat messages. Render the returned canonical
+      // message immediately; the matching websocket broadcast is deduped by id.
+      if (uploaded?.message_id && isTrustedStorageImage(uploaded.url)) {
+        const messageId = String(uploaded.message_id);
+        sentMessageIdsRef.current.add(messageId);
+        setMessages((prev) => prev.map((msg) => msg.id === tempId ? {
+          ...msg,
+          id: messageId,
+          imageUrl: uploaded.url,
+          isUploading: false,
+          created_at: uploaded.created_at || msg.created_at,
+          status: 'delivered',
+        } : msg));
+      } else {
+        // Stranger-room delivery uses `photo_ready`; keep the local preview
+        // visible after the upload while waiting for that one-time event.
+        setMessages((prev) => prev.map((msg) => msg.id === tempId ? { ...msg, isUploading: false } : msg));
+      }
+      if (roomId) bumpOwnMessage(roomId, 'Photo');
     } catch (error) {
+      URL.revokeObjectURL(localPreviewUrl);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
       setMessages((prev) => [...prev, { id: `sys-pr-error-${Date.now()}`, content: error instanceof Error ? error.message : 'Failed to send photo.', isSystem: true, isOwn: false }]);
     }
@@ -662,6 +731,7 @@ export default function ChatRoom({
                 time={msg.created_at}
                 imageUrl={(msg as any).imageUrl}
                 onImageClick={handleImageClick}
+                isUploading={msg.isUploading}
               />
             ))}
             
@@ -700,7 +770,7 @@ export default function ChatRoom({
           onSend={handleSend}
           disabled={!isDevMode && !isConnected}
           onTyping={handleTyping}
-          onDirectImageClick={handleRequestPhoto}
+          onRequestPhoto={handleRequestPhoto}
           photoRequestDisabled={photoRequestBusy}
         />
       </div>
