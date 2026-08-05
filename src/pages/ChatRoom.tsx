@@ -717,7 +717,7 @@ export default function ChatRoom({
         )}
       </div>
 
-      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] pb-safe z-10 w-full min-w-0 relative">
+      <div className="flex-shrink-0 bg-[var(--card)] border-t border-[var(--border-color)] z-10 w-full min-w-0 relative">
         <AnimatePresence>
           {incomingPhotoRequest && (
             <motion.div
