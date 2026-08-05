@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
-const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? '';
+const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqeegprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
 // User-authored chat payloads are not trusted image sources. Only URLs served
 // by our configured storage CDN may be embedded as images in DM history/live
@@ -327,14 +327,21 @@ export default function ChatRoom({
         
         const messageText = lastMessage.payload?.text || '';
         const mediaUrl = lastMessage.payload?.mediaUrl || lastMessage.payload?.media_url;
-        const isImage = lastMessage.payload?.mediaType === 'image' || lastMessage.payload?.media_type === 'image';
+        // Current DM deployments may place the persisted image URL in `text`;
+        // newer payloads use media_url/media_type. Both are safe only when the
+        // URL belongs to our configured storage origin.
+        const imageUrl = isTrustedStorageImage(mediaUrl)
+          ? mediaUrl
+          : isTrustedStorageImage(messageText)
+            ? messageText
+            : undefined;
         const newMsg = {
           id: lastMessage.id,
-          content: messageText,
+          content: imageUrl ? '' : messageText,
           created_at: new Date(tsMs).toISOString(),
           isOwn,
           status: 'delivered',
-          imageUrl: isImage && isTrustedStorageImage(mediaUrl) ? mediaUrl : undefined,
+          imageUrl,
         };
         
         setMessages(prev => {
