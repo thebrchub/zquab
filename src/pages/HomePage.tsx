@@ -202,7 +202,8 @@ export default function HomePage() {
                           key={room.room_id} 
                           onClick={() => handleRoomClick(room, partnerName, partnerUsername, partner?.avatar_url, partner?.is_online)}
                           className={`p-4 transition-colors flex items-center gap-4 cursor-pointer ${
-                            isSelected ? 'bg-[var(--card)] border-l-4 border-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
+                            
+isSelected ? 'bg-[var(--card)] border-l-4 border-l-[#3B82F6]' : 'bg-[var(--background)] hover:bg-[var(--card)]'
                           }`}
                         >
                           <div className="relative flex-shrink-0">
