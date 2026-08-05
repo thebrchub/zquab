@@ -16,17 +16,42 @@
     <priority>0.9</priority>
   </url>
 
+  <!-- Blog Listing Page -->
+  <url>
+    <loc>https://www.zquab.com/blogs</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Individual Blog Posts (Add each article slug here) -->
+  <url>
+    <loc>https://www.zquab.com/blog/how-to-have-better-conversations-with-strangers</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+   <url>
+    <loc>https://www.zquab.com/blog/privacy-first-why-we-dont-want-your-data</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+
   <!-- User Authentication -->
   <url>
     <loc>https://www.zquab.com/auth</loc>
     <lastmod>2026-08-05</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.5</priority>
   </url>
 
   <!-- Legal & Info -->
   <url>
     <loc>https://www.zquab.com/about</loc>
+    <lastmod>2026-08-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
