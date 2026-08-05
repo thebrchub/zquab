@@ -12,7 +12,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
-const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqeegprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
+// Change "qeegprlu" to "qegeprlu"
+const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
 const isTrustedStorageImage = (value: unknown): value is string =>
   typeof value === 'string' &&

@@ -19,10 +19,21 @@ const isOnlyEmojis = (str: string) => {
   return emojiRegex.test(str);
 };
 
-function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImageClick, isUploading }: Props) {
+function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImageClick, isUploading, isSystem }: Props) {
   const displayText = content || message || '';
-  const formattedTime = time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   
+  // 🛠️ FIXED: Added the logic to completely bypass the normal bubble for system messages!
+  if (isSystem) {
+    return (
+      <div className="flex justify-center my-4 sm:my-6 w-full select-none">
+        <span className="text-[11px] sm:text-xs font-black text-[var(--text-muted)] uppercase tracking-widest text-center px-4">
+          {displayText}
+        </span>
+      </div>
+    );
+  }
+
+  const formattedTime = time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   const emojiOnly = isOnlyEmojis(displayText);
 
   return (
@@ -66,7 +77,6 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
                  }`
             }`}
         >
-          {/* 🛠️ FIXED: Added break-all and whitespace-pre-wrap to strictly enforce boundaries and line-breaks */}
           <p className="break-words break-all whitespace-pre-wrap">{displayText}</p>
           
           {formattedTime && !emojiOnly && (
