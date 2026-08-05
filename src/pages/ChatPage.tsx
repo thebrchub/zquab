@@ -387,7 +387,7 @@ export default function ChatPage() {
 
   return (
     
-    <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:gap-6 p-0 md:p-6 overflow-hidden h-[calc(100dvh-64px)] md:h-[calc(100dvh-82px)] relative">
+    <div className="w-full flex flex-col overflow-hidden fixed top-[64px] inset-x-0 bottom-0 z-40 md:relative md:top-auto md:inset-auto md:z-auto md:max-w-7xl md:mx-auto md:flex-row md:gap-6 md:p-6 md:h-[calc(100dvh-82px)]">
       
       <AnimatePresence>
         {viewingImage && (

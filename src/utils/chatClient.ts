@@ -1,4 +1,4 @@
-import protobuf from 'protobufjs'; // You can usually drop the /dist/ part in Vite
+import protobuf from 'protobufjs'; 
 import chatProtoSrc from '../proto/chat.proto?raw';
 import eventsProtoSrc from '../proto/events.proto?raw';
 
@@ -16,18 +16,10 @@ type ChatCallbackOptions = {
   onPhotoRequest?: (roomId: string, from: string) => void;
   onPhotoResponse?: (roomId: string, from: string, accepted: boolean) => void;
   onPhotoReady?: (roomId: string, from: string, url: string, expiresAt: number) => void;
-  /** Fired when a mutual add-friend during this stranger match succeeds. */
   onFriendAccepted?: (dmRoomId: string) => void;
-  /** Fired once the local IP-geolocation lookup resolves (or fails). */
   onLocationDetected?: (country: { name: string; code: string } | null) => void;
-  /** 🛠️ Added for typing animation */
   onPartnerTyping?: (isTyping: boolean) => void; 
 };
-
-interface IpApiResponse {
-  country: string;      // alpha-2 code, e.g. "IN" (despite the name, this is the code — ipapi.co's full name field is `country_name`)
-  country_name: string; // full country name, e.g. "India"
-}
 
 type ChatMessage = {
   id: string;
@@ -46,11 +38,12 @@ export class ChatClient {
   private userId: string | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: number | null = null;
+  private friendPresenceTimer: number | null = null; // 🛠️ NEW: Timer for friend disconnect tracking
   private isShuttingDown = false;
   private knownMessageIds = new Set<string>();
   private callbacks: ChatCallbackOptions;
 
-  // Protobuf Types (Loaded asynchronously)
+  // Protobuf Types 
   private Envelope: protobuf.Type | null = null;
   private ChatMessageProto: protobuf.Type | null = null;
   private MatchFound: protobuf.Type | null = null;
@@ -62,8 +55,7 @@ export class ChatClient {
   private FriendAcceptedProto: protobuf.Type | null = null;
   private FriendRequestProto: protobuf.Type | null = null;
 
-  // Detected once at startup and sent along with /match/enter so the server
-  // can pass a `partner_location` through to the other side of a match.
+  // We no longer need to rely on this heavily, but keeping it for compatibility
   private locationCode: string | null = null;
 
   constructor(callbacks: ChatCallbackOptions) {
@@ -72,10 +64,6 @@ export class ChatClient {
 
   async start() {
     try {
-      // Location detection runs in parallel — enterMatch() (fired from the
-      // socket's onopen) reads whatever locationCode has resolved to by
-      // then; a slow/failed lookup just means no location is sent, it
-      // never blocks connecting.
       this.detectLocation();
       await this.loadProtos();
       await this.ensureGuest();
@@ -87,24 +75,12 @@ export class ChatClient {
   }
 
   private async detectLocation() {
-    try {
-      const res = await fetch('https://ipapi.co/json/');
-      if (!res.ok) throw new Error('Unable to determine location');
-      const data: IpApiResponse = await res.json();
-      this.locationCode = data.country || null;
-      this.callbacks.onLocationDetected?.({
-        name: data.country_name || 'Unknown country',
-        code: data.country || '',
-      });
-    } catch {
-      this.locationCode = null;
-      this.callbacks.onLocationDetected?.({ name: 'Location unavailable', code: '' });
-    }
+    // 🛠️ FIXED: Removed 3rd-party IP lookup. We now rely strictly on DB profile data.
+    this.locationCode = null;
+    this.callbacks.onLocationDetected?.(null);
   }
 
   private async loadProtos() {
-    // Bundled at build time (Vite `?raw` import) instead of fetched at
-    // runtime — keeps the schema out of the network tab entirely.
     const root = new protobuf.Root();
     protobuf.parse(chatProtoSrc, root);
     protobuf.parse(eventsProtoSrc, root);
@@ -141,26 +117,22 @@ export class ChatClient {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Guest login error';
       this.callbacks.onError?.(message);
-      this.callbacks.onSystemMessage('Unable to initialize chat session.');
       throw error;
     }
   }
 
   private connect() {
-    if (!this.Envelope) return; // Guard clause to ensure protos are loaded
+    if (!this.Envelope) return; 
 
     this.clearReconnectTimer();
-    this.callbacks.onSystemMessage('Connecting to chat server...');
     this.socket = new WebSocket(`${WS_BASE}/ws`);
     this.socket.binaryType = 'arraybuffer';
 
     this.socket.onopen = () => {
       this.reconnectAttempts = 0;
       this.callbacks.onSocketOpen?.();
-      this.callbacks.onSystemMessage('Connected. Entering queue...');
       this.enterMatch().catch((error) => {
         this.callbacks.onError?.(String(error));
-        this.callbacks.onSystemMessage('Unable to join queue.');
       });
     };
 
@@ -182,13 +154,39 @@ export class ChatClient {
             const match = this.MatchFound.decode(payload) as any;
             const roomId = match.roomId as string;
             const partnerId = match.partnerId as string;
-            const partnerLocation = match.partnerLocation as string | undefined;
             const partnerUsername = match.partnerUsername as string | undefined;
             const isFriend = Boolean((match as any).isFriend ?? (match as any).is_friend ?? false);
             this.currentRoomId = roomId;
-            this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername, isFriend);
-            this.callbacks.onStatusChange('connected');
-            this.callbacks.onSystemMessage('Match found! Say hello.');
+
+            // 🛠️ ASYNC HANDLER: Fetch true country from database and handle friend presence
+            (async () => {
+              let partnerLocation = match.partnerLocation as string | undefined;
+
+              // 1. Resolve Country from Profile if missing
+              if ((!partnerLocation || partnerLocation === 'Unknown location' || partnerLocation.trim() === '') && partnerUsername) {
+                try {
+                  // Ensure this endpoint matches your backend profile route
+                  const res = await fetch(`${API_BASE}/api/v1/users/${partnerUsername}`, { credentials: 'include' });
+                  if (res.ok) {
+                    const profile = await res.json();
+                    if (profile?.country) partnerLocation = profile.country;
+                  }
+                } catch (e) {
+                  console.error('Failed to fetch partner profile for location', e);
+                }
+              }
+
+              // 2. Race condition check: Ensure the user didn't hit "Next" while we were fetching
+              if (this.currentRoomId !== roomId) return;
+
+              this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername, isFriend);
+              this.callbacks.onStatusChange('connected');
+
+              // 3. Friend Phantom Connection Fix: Start the heartbeat tracker!
+              if (isFriend && partnerUsername) {
+                this.startFriendPresenceCheck(partnerUsername, roomId);
+              }
+            })();
             break;
           }
           case 'chat_message': {
@@ -204,7 +202,6 @@ export class ChatClient {
             const text = msg.text as string;
             const from = envelope.from as string;
             
-            // 🛠️ Turn off typing indicator when a message arrives
             this.callbacks.onPartnerTyping?.(false);
 
             this.callbacks.onIncomingMessage({
@@ -219,10 +216,10 @@ export class ChatClient {
             const disconnected = this.StrangerDisconnected.decode(payload) as any;
             const roomId = disconnected.roomId as string;
 
-            // Ignore stale events for a room we've already left (e.g. after "Next").
             if (roomId !== this.currentRoomId) break;
 
             this.currentRoomId = null;
+            this.stopFriendPresenceCheck(); // 🛠️ Clear heartbeat
             this.callbacks.onStatusChange('disconnected');
             this.callbacks.onSystemMessage('The stranger disconnected.');
             this.callbacks.onDisconnected('Stranger disconnected');
@@ -231,10 +228,10 @@ export class ChatClient {
           case 'room_closed': {
             const closedRoomId = envelope.roomId as string;
 
-            // Ignore stale events for a room we've already left (e.g. after "Next").
             if (closedRoomId && closedRoomId !== this.currentRoomId) break;
 
             this.currentRoomId = null;
+            this.stopFriendPresenceCheck(); // 🛠️ Clear heartbeat
             this.callbacks.onStatusChange('disconnected');
             this.callbacks.onSystemMessage('Chat room closed.');
             this.callbacks.onDisconnected('Room closed');
@@ -250,8 +247,6 @@ export class ChatClient {
           case 'friend_request': {
             if (!this.FriendRequestProto) break;
             const req = this.FriendRequestProto.decode(payload) as any;
-            // Only surface this for the current stranger room — ignore any
-            // unrelated friend_request (e.g. from search/profile elsewhere).
             if ((req.roomId as string) !== this.currentRoomId) break;
             this.callbacks.onSystemMessage('Stranger wants to be friends! Click Add Friend to accept.');
             break;
@@ -282,7 +277,6 @@ export class ChatClient {
             this.callbacks.onPhotoReady?.(ready.roomId as string, ready.from as string, ready.url as string, Number(ready.expiresAt));
             break;
           }
-          // 🛠️ Handle incoming typing events
           case 'typing_start':
           case 'typing_status': {
             this.callbacks.onPartnerTyping?.(true);
@@ -303,7 +297,6 @@ export class ChatClient {
       if (this.isShuttingDown) {
         return;
       }
-      this.callbacks.onSystemMessage('Disconnected from chat server. Retrying...');
       this.callbacks.onStatusChange('searching');
       this.scheduleReconnect();
     };
@@ -311,6 +304,40 @@ export class ChatClient {
     this.socket.onerror = () => {
       this.callbacks.onError?.('WebSocket error occurred.');
     };
+  }
+
+  // 🛠️ NEW: Heartbeat to catch when a friend disconnects/goes offline
+  private startFriendPresenceCheck(username: string, roomId: string) {
+    this.stopFriendPresenceCheck();
+    this.friendPresenceTimer = window.setInterval(async () => {
+      if (this.currentRoomId !== roomId) {
+        this.stopFriendPresenceCheck();
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/users/${username}`, { credentials: 'include' });
+        if (response.ok) {
+          const profile = await response.json();
+          // If backend marks them offline, they closed the app! Disconnect!
+          if (profile && profile.is_online === false) {
+            if (this.currentRoomId === roomId) {
+              this.currentRoomId = null;
+              this.callbacks.onStatusChange('disconnected');
+              this.callbacks.onSystemMessage('Your friend left the chat.');
+              this.callbacks.onDisconnected('Friend left');
+              this.stopFriendPresenceCheck();
+            }
+          }
+        }
+      } catch (e) { /* Ignore temporary network glitches */ }
+    }, 10000); // Check every 10 seconds
+  }
+
+  private stopFriendPresenceCheck() {
+    if (this.friendPresenceTimer !== null) {
+      window.clearInterval(this.friendPresenceTimer);
+      this.friendPresenceTimer = null;
+    }
   }
 
   private scheduleReconnect() {
@@ -342,34 +369,23 @@ export class ChatClient {
       this.currentRoomId = matchedRoomId;
       this.callbacks.onMatchFound(matchedRoomId, '', matchedPartnerLocation, matchedPartnerUsername, matchedIsFriend);
       this.callbacks.onStatusChange('connected');
-      this.callbacks.onSystemMessage('Match found! Say hello.');
       return;
     }
 
-    // A match_found event may have already arrived over the WebSocket while
-    // this request was in flight. Don't clobber the resulting 'connected'
-    // status back to 'searching'.
     if (this.currentRoomId) {
       return;
     }
 
-    this.callbacks.onSystemMessage('Searching for a stranger...');
     this.callbacks.onStatusChange('searching');
   }
 
   async leaveQueue() {
     await this.restPost('/api/v1/match/leave', {});
-    this.callbacks.onSystemMessage('Left the queue.');
     this.callbacks.onStatusChange('searching');
   }
 
-  /**
-   * Best-effort queue cleanup with no state/callback side effects — for use
-   * on unmount/page-unload where updating React state is pointless (or
-   * impossible) and we just want the server to drop the stale queue entry.
-   * `keepalive` lets the request outlive a page unload (e.g. tab close).
-   */
   leaveQueueSilently(keepalive = false) {
+    this.stopFriendPresenceCheck(); // Clean up heartbeat
     fetch(`${API_BASE}/api/v1/match/leave`, {
       method: 'POST',
       credentials: 'include',
@@ -407,7 +423,6 @@ export class ChatClient {
     return id;
   }
   
-  // 🛠️ Emit 'typing_start' to the server
   sendTypingStart() {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.currentRoomId || !this.Envelope) {
       return;
@@ -424,7 +439,6 @@ export class ChatClient {
     }
   }
 
-  // 🛠️ Emit 'typing_end' to the server
   sendTypingEnd() {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.currentRoomId || !this.Envelope) {
       return;
@@ -450,6 +464,7 @@ export class ChatClient {
   }
 
   async skipAndRequeue(currentRoomId: string) {
+    this.stopFriendPresenceCheck(); // Clean up heartbeat
     await this.sendMatchAction(currentRoomId, 'skip');
     this.currentRoomId = null;
     await this.enterMatch();
@@ -459,26 +474,18 @@ export class ChatClient {
     if (!this.currentRoomId) {
       return;
     }
+    this.stopFriendPresenceCheck(); // Clean up heartbeat
     await this.sendMatchAction(this.currentRoomId, 'block');
     this.currentRoomId = null;
     this.callbacks.onStatusChange('disconnected');
   }
 
-  // Sends the mutual add-friend request for the current stranger match.
-  // The REST response tells the caller 'pending' (one-sided so far) or
-  // 'friends' (already mutual); the async 'friend_accepted' WS event (above)
-  // is what fires when the *other* side accepts later.
   async addCurrentPartnerAsFriend() {
     if (!this.currentRoomId) {
       throw new Error('No active room');
     }
     return this.sendMatchAction(this.currentRoomId, 'friend');
   }
-
-  // ---------------------------------------------------------------------
-  // Stranger photo sharing — request/approve, then a direct client<->R2
-  // upload via presigned URL. The backend never sees the photo bytes.
-  // ---------------------------------------------------------------------
 
   async requestPhoto() {
     if (!this.currentRoomId) throw new Error('No active room');
@@ -490,7 +497,6 @@ export class ChatClient {
     await this.restPost('/api/v1/match/photo/respond', { room_id: this.currentRoomId, accept: false });
   }
 
-  /** Accepts a pending photo request, uploads the file directly to storage, and confirms delivery. */
   async sharePhoto(file: File) {
     if (!this.currentRoomId) throw new Error('No active room');
 
@@ -522,6 +528,7 @@ export class ChatClient {
 
   shutdown() {
     this.isShuttingDown = true;
+    this.stopFriendPresenceCheck(); // Clean up heartbeat
     this.clearReconnectTimer();
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.close();
@@ -538,14 +545,12 @@ export class ChatClient {
 
     if (!response.ok) {
       const text = await response.text();
-      // Backend errors are JSON: {"error": "message"} — surface just the
-      // message when present instead of the raw status+body blob.
       let message = text;
       try {
         const parsed = JSON.parse(text) as { error?: string };
         if (parsed.error) message = parsed.error;
       } catch {
-        // not JSON — fall back to the raw text
+        // not JSON
       }
       throw new Error(message);
     }
