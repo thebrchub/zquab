@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Landing Page -->
+  <url>
+    <loc>https://www.zquab.com/</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- Stranger Chat Matchmaking -->
+  <url>
+    <loc>https://www.zquab.com/chat</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>always</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- User Authentication -->
+  <url>
+    <loc>https://www.zquab.com/auth</loc>
+    <lastmod>2026-08-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Legal & Info -->
+  <url>
+    <loc>https://www.zquab.com/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>

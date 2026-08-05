@@ -7,15 +7,14 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-
       gtag('config', 'G-K6188DLV71');
     </script>
+    
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
     
-    <!-- Bulletproof Anti-FOUC (Flash of Unstyled Content) -->
+    <!-- Bulletproof Anti-FOUC -->
     <style>
-      /* Hardcode the base colors so they paint instantly before React/Tailwind even wake up */
       html { background-color: #09090B; color: #FAFAFA; }
       html.light { background-color: #F8FAFC; color: #111827; }
     </style>
@@ -23,7 +22,6 @@
       (function() {
         try {
           var savedTheme = localStorage.getItem('theme');
-          // If they explicitly saved light mode, switch to it. Otherwise, force dark.
           if (savedTheme === 'light') {
             document.documentElement.classList.remove('dark');
             document.documentElement.classList.add('light');
@@ -34,13 +32,16 @@
       })();
     </script>
     
-    <!-- Primary Meta Tags -->
-    <title>zQuab | Meet someone new in seconds.</title>
-    <meta name="title" content="zQuab — Meet someone new in seconds." />
-    <meta name="description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations." />
+    <!-- Primary Meta Tags (Optimized for target keywords) -->
+    <title>zQuab | Anonymous Chat & Meet Strangers Instantly</title>
+    <meta name="title" content="zQuab | Anonymous Chat & Meet Strangers Instantly" />
+    <meta name="description" content="Chat instantly with strangers around the world on zQuab. A free, anonymous random chat platform. No signup. No downloads. Just real conversations." />
     <meta name="theme-color" content="#09090B" />
     
-    
+    <!-- Search Engine Indexing (CRITICAL: Changed to allow indexing) -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow" />
+
     <!-- Canonical URL -->
     <link rel="canonical" href="https://www.zquab.com/" />
 
@@ -50,19 +51,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     
-    <!-- Fonts -->
+    <!-- Fonts & Core Web Vitals Preconnects -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
-    <!-- TEMPORARY: Block Search Engine Indexing (Remove before launch!) -->
-    <meta name="robots" content="noindex, nofollow" />
-    <meta name="googlebot" content="noindex, nofollow" />
 
     <!-- Open Graph / Facebook / Discord / WhatsApp -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://www.zquab.com/" />
-    <meta property="og:title" content="zQuab — Meet someone new in seconds." />
+    <meta property="og:title" content="zQuab | Anonymous Chat & Meet Strangers Instantly" />
     <meta property="og:description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations." />
     <meta property="og:image" content="https://www.zquab.com/og-image.jpg" />
     <meta property="og:site_name" content="zQuab" />
@@ -70,9 +68,33 @@
     <!-- Twitter / X -->
     <meta property="twitter:card" content="summary_large_image" />
     <meta property="twitter:url" content="https://www.zquab.com/" />
-    <meta property="twitter:title" content="zQuab — Meet someone new in seconds." />
+    <meta property="twitter:title" content="zQuab | Anonymous Chat & Meet Strangers Instantly" />
     <meta property="twitter:description" content="Chat instantly with strangers around the world. No signup. No downloads. Just real conversations." />
     <meta property="twitter:image" content="https://www.zquab.com/og-image.jpg" />
+
+    <!-- JSON-LD Structured Data for AEO & Rich Snippets -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "zQuab",
+        "url": "https://www.zquab.com/",
+        "description": "Chat instantly with strangers around the world. A free, anonymous random chat platform with no signup required.",
+        "applicationCategory": "SocialNetworkingApplication",
+        "operatingSystem": "All",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Anonymous chat",
+          "No signup required",
+          "Instant matching",
+          "Text chat"
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

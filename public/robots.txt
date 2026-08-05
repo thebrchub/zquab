@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Prevent indexing of private dynamic routes
+Disallow: /home
+Disallow: /user/*
+
+Sitemap: https://www.zquab.com/sitemap.xml
