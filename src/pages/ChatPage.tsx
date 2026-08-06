@@ -499,12 +499,12 @@ export default function ChatPage() {
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowMobileMenu(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]" 
             />
             <motion.div
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[101] shadow-2xl flex flex-col border-l border-[var(--border-color)]" 
+              className="fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[9999] shadow-2xl flex flex-col border-l border-[var(--border-color)]" 
             >
               <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)]">
                 <h3 className="font-bold text-[var(--text-main)]">Dashboard</h3>
