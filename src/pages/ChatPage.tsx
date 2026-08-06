@@ -238,9 +238,11 @@ export default function ChatPage() {
         if (href) {
           if (href.startsWith('/auth') && status === 'connected') {
             setShowAuthWarning(true);
+            setShowMobileMenu(false); // 👈 Forces sidebar closed!
           } else {
             setPendingRoute(href);
             setShowLeaveConfirm(true); 
+            setShowMobileMenu(false); // 👈 Forces sidebar closed!
           }
         }
       }
@@ -376,6 +378,7 @@ export default function ChatPage() {
   const handleAddFriend = () => {
     if (!user || user.is_guest) {
       setShowLoginPrompt(true); 
+      setShowMobileMenu(false);
       return;
     }
     if (isDev) {
@@ -526,7 +529,10 @@ export default function ChatPage() {
                   onAddFriend={handleAddFriend}
                   friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
                   isAlreadyFriend={isMatchWithFriend}
-                  onLeaveConfirm={() => setShowLeaveConfirm(true)} 
+                  onLeaveConfirm={() => {
+  setShowLeaveConfirm(true);
+  setShowMobileMenu(false); // 👈 Forces sidebar closed!
+}}
                 />
               </div>
             </motion.div>
@@ -817,7 +823,7 @@ export default function ChatPage() {
           onAddFriend={handleAddFriend}
           friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
           isAlreadyFriend={isMatchWithFriend}
-          onLeaveConfirm={() => setShowLeaveConfirm(true)} 
+          onLeaveConfirm={() => setShowLeaveConfirm(true)}
         />
       </div>
     </div>
