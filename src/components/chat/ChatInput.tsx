@@ -24,38 +24,33 @@ export default function ChatInput({
   const [showDrawer, setShowDrawer] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   
-  // 🛠️ NEW: Ref to control textarea height dynamically
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
+  // 🛠️ UPDATED: Uses the secure CDN URL we discussed earlier
+  const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://cdn.zquab.com/';
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-  let newValue = e.target.value;
+    let newValue = e.target.value;
 
-  // 🛠️ SCRUBBER: Instantly wipe out any dropped/pasted Supabase URLs
-  if (newValue.includes(STORAGE_CDN_BASE_URL)) {
-    // This regex cleanly removes the base URL and the unique image ID attached to it
-    newValue = newValue.replace(new RegExp(STORAGE_CDN_BASE_URL + '\\S*', 'g'), '');
-  }
+    if (newValue.includes(STORAGE_CDN_BASE_URL)) {
+      newValue = newValue.replace(new RegExp(STORAGE_CDN_BASE_URL + '\\S*', 'g'), '');
+    }
 
-  setText(newValue);
-  
-  if (onTyping) onTyping();
+    setText(newValue);
+    
+    if (onTyping) onTyping();
 
-  // 🛠️ Auto-resize logic: expand height as user types, up to a max limit
-  if (textareaRef.current) {
-    textareaRef.current.style.height = 'auto'; // Reset to calculate true height
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-  }
-};
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'; 
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  };
 
-  // 🛠️ NEW: Keydown handler for Enter vs Shift+Enter
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault(); // Stop it from creating a new line
+      e.preventDefault(); 
       handleSend();
     }
-    // If Shift + Enter is pressed, do nothing and let it naturally go to the next line
   };
 
   const handleSend = () => {
@@ -65,7 +60,6 @@ export default function ChatInput({
     setShowDrawer(false);
     setShowEmoji(false); 
     
-    // Reset textarea height after sending
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -115,7 +109,8 @@ export default function ChatInput({
 
               <div className="flex items-start gap-3 mb-4 bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
                 <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-[var(--text-main)] leading-relaxed">
+                {/* 🛠️ FIX: Bumped from text-xs to text-sm for better readability */}
+                <p className="text-sm text-[var(--text-main)] leading-relaxed">
                   For safety, direct photo uploads are disabled. You can only request photos. If you want to send one, the stranger must request it from you first!
                 </p>
               </div>
@@ -174,7 +169,6 @@ export default function ChatInput({
             <Smile className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           
-          {/* 🛠️ CHANGED: input to textarea */}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -183,7 +177,8 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={disabled ? "Waiting..." : "Message..."}
-            className="flex-1 min-w-0 bg-transparent outline-none py-2 pr-2 text-[var(--text-main)] placeholder:text-[var(--text-muted)] disabled:opacity-50 text-sm sm:text-base resize-none custom-scrollbar"
+            // 🛠️ FIX: Bumped to text-base (16px) for mobile to prevent iOS zooming, and md:text-[17px] for desktop
+            className="flex-1 min-w-0 bg-transparent outline-none py-2 pr-2 text-[var(--text-main)] placeholder:text-[var(--text-muted)] disabled:opacity-50 text-base md:text-[17px] resize-none custom-scrollbar"
             style={{ maxHeight: '120px' }}
           />
         </div>
