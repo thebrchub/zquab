@@ -22,6 +22,8 @@ const ReceiptProto = safeLookup('chatpb.Receipt', 'Receipt');
 const PhotoRequestProto = safeLookup('eventspb.PhotoRequest', 'PhotoRequest');
 const PhotoResponseProto = safeLookup('eventspb.PhotoResponse', 'PhotoResponse');
 const PhotoReadyProto = safeLookup('eventspb.PhotoReady', 'PhotoReady');
+// 🛠️ NEW: Added Unfriended Proto Lookup
+const UnfriendedProto = safeLookup('eventspb.Unfriended', 'Unfriended');
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -38,7 +40,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnectTimeoutRef = useRef<number | null>(null);
 
   const connect = () => {
-    // 🛠️ FIX: Removed the early return so you can actually test on localhost!
     if (import.meta.env.DEV || window.location.hostname === 'localhost') {
       console.info('🛠️ DEV MODE: Connecting to WebSocket for local testing.');
     }
@@ -75,7 +76,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             if (t === 'message_delivered' || t === 'message_sent_confirm' || t === 'chat_message') {
               decodedPayload = ChatMessageProto.decode(envelope.payload);
               
-              // 🛠️ FIX: Normalize protobufjs camelCase back to snake_case for the UI
               if (decodedPayload.mediaUrl) decodedPayload.media_url = decodedPayload.mediaUrl;
               if (decodedPayload.mediaType) decodedPayload.media_type = decodedPayload.mediaType;
               if (decodedPayload.replyTo) decodedPayload.reply_to = decodedPayload.replyTo;
@@ -86,6 +86,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
               decodedPayload = PhotoResponseProto.decode(envelope.payload);
             } else if (t === 'photo_ready' && PhotoReadyProto) {
               decodedPayload = PhotoReadyProto.decode(envelope.payload);
+            } else if (t === 'unfriend' && UnfriendedProto) {
+              // 🛠️ NEW: Decode the Unfriend event payload
+              decodedPayload = UnfriendedProto.decode(envelope.payload);
             } else if (t === 'message_read' || t === 'message_delivered_receipt' || t === 'message_receipt' || t === 'receipt') {
               if (ReceiptProto) {
                 try {
@@ -112,7 +115,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           payload: decodedPayload,
         });
 
-        // Optional UX: Trigger notification only for standard chat messages
         if (envelope.type === 'chat_message') {
           window.dispatchEvent(new CustomEvent('zquab_notification', { 
             detail: { message: 'New Message! 💬' } 
@@ -155,7 +157,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     try {
       let payloadBytes: any = new Uint8Array();
       
-      // 🛠️ FIX: Safely map UI snake_case fields back into Protobuf camelCase structure
       if (type === 'chat_message' && payload) {
         const chatMsg = ChatMessageProto.create({ 
           text: payload.text || '',
@@ -169,7 +170,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       const msgId = id || globalThis.crypto?.randomUUID?.() || `${Date.now()}`;
       const envelope = Envelope.create({
         type,
-        roomId, // Protobufjs uses camelCase here
+        roomId, 
         to,
         payload: payloadBytes,
         ts: Date.now(),

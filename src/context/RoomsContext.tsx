@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { roomsApi } from '../api/rooms';
-import { friendsApi } from '../api/friends'; // 🛠️ ADDED: To fetch friend requests globally
+import { friendsApi } from '../api/friends'; 
 import { useAuth } from './AuthContext';
 import { useWebSocket } from './WebSocketContext';
 
@@ -31,7 +31,6 @@ interface RoomsContextType {
   totalUnread: number;
   loading: boolean;
   
-  // 🛠️ NEW: Exposing Friend Requests globally
   friendRequests: any[];
   setFriendRequests: React.Dispatch<React.SetStateAction<any[]>>;
   
@@ -54,7 +53,6 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [activeRoomId, setActiveRoomIdState] = useState<string | null>(null);
   
-  // 🛠️ NEW: Global State for Friend Requests
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
 
   const setActiveRoomId = useCallback((roomId: string | null) => {
@@ -75,7 +73,6 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 🛠️ NEW: Function to fetch friend requests
   const refreshFriendRequests = useCallback(async () => {
     try {
       const data = await friendsApi.getRequests('received', 10, 0);
@@ -85,12 +82,11 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Fetch everything on initial load
   useEffect(() => {
     if (!isFullUser) {
       setRooms([]);
       setUsersMap({});
-      setFriendRequests([]); // Clear requests on logout
+      setFriendRequests([]); 
       setLoading(false);
       return;
     }
@@ -101,17 +97,35 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     })();
   }, [isFullUser, refreshRooms, refreshFriendRequests]);
 
-  // 🛠️ NEW: WebSocket Listener for Friend Requests
-  // The API Guide specifically says: "treat the WS event as the source of truth for 'refetch this list now'"
+  // 🛠️ NEW: Handles unfriend events and friend requests
+ // 🛠️ NEW: Handles unfriend events and friend requests
   useEffect(() => {
     if (!lastMessage) return;
+    const type = lastMessage.type;
     
-    if (['friend_request', 'friend_accepted', 'friend_request_withdrawn'].includes(lastMessage.type)) {
+    // Refresh requests for any friend-related event
+    if (['friend_request', 'friend_accepted', 'friend_request_withdrawn', 'unfriend'].includes(type)) {
       refreshFriendRequests();
     }
-  }, [lastMessage, refreshFriendRequests]);
 
-  // Live resync for chat messages
+    // 🛠️ If unfriended, instantly kill the DM room UI
+    if (type === 'unfriend') {
+      const deletedRoomId = lastMessage.payload?.roomId || lastMessage.payload?.room_id;
+      if (deletedRoomId) {
+        setRooms(prev => prev.filter(r => r.room_id !== deletedRoomId));
+        
+        // FIX: Compare against activeRoomId, not the setter function!
+        if (activeRoomId === deletedRoomId) {
+          setActiveRoomIdState(null);
+          sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
+          if (window.location.search.includes(deletedRoomId)) {
+             window.location.assign('/home');
+          }
+        }
+      }
+    }
+  }, [lastMessage, refreshFriendRequests, activeRoomId]); // FIX: Updated dependency array
+
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'chat_message') return;
 
@@ -141,7 +155,6 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [lastMessage, user, activeRoomId]);
 
-  // Presence updates
   useEffect(() => {
     if (!lastMessage) return;
     if (lastMessage.type !== 'presence_online' && lastMessage.type !== 'presence_offline') return;
@@ -158,7 +171,6 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     });
   }, [lastMessage]);
 
-  // Read receipts
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'read') return;
 

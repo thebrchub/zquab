@@ -3,7 +3,8 @@ import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
 import TypingIndicator from '../components/chat/TypingIndicator';
-import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, ShieldAlert } from 'lucide-react';
+// 🛠️ NEW: Imported AlertTriangle for the warning modal
+import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
@@ -11,7 +12,6 @@ import { useAuth } from '../context/AuthContext';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
-// 🛠️ 1. ADDED isUploading to the UI Message Type
 type UIMessage = ChatMessage & { isSystem?: boolean; isUploading?: boolean };
 
 const compressImageToWebP = (file: File): Promise<File> => {
@@ -75,12 +75,15 @@ export default function ChatPage() {
   const [incomingPhotoRequest, setIncomingPhotoRequest] = useState(false);
   const [photoRequestBusy, setPhotoRequestBusy] = useState(false);
   const [partnerUsername, setPartnerUsername] = useState<string | undefined>(undefined);
-  const [partnerAvatar, setPartnerAvatar] = useState<string | undefined>(undefined); // 🛠️ NEW: Added avatar state
+  const [partnerAvatar, setPartnerAvatar] = useState<string | undefined>(undefined); 
   const [isMatchWithFriend, setIsMatchWithFriend] = useState(false);
   const [partnerGender, setPartnerGender] = useState<string | undefined>(undefined);
   const [friendRequestSent, setFriendRequestSent] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  
+  // 🛠️ NEW: State to control the auth interruption warning
+  const [showAuthWarning, setShowAuthWarning] = useState(false);
 
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingStateRef = useRef(false);
@@ -96,11 +99,9 @@ export default function ChatPage() {
     statusRef.current = status;
   }, [status]);
 
-  // 🛠️ THE FIX: Strictly lock the global body scroll while on the Chat Page
-  // This prevents the mobile keyboard from pushing the header behind the navbar
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    document.body.style.overscrollBehavior = 'none'; // Prevents mobile pull-to-refresh bounce
+    document.body.style.overscrollBehavior = 'none'; 
     
     return () => {
       document.body.style.overflow = '';
@@ -159,11 +160,10 @@ export default function ChatPage() {
         console.log('[Chat System]:', text);
         setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]);
       },
-      // 🛠️ FIX: Added partnerAvatar to the destructuring here
       onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername, isFriend, partnerAvatar) => {
         setPartnerUsername(partnerUsername);
         setIsMatchWithFriend(Boolean(isFriend));
-        setPartnerAvatar(partnerAvatar); // 🛠️ FIX: Save it to state
+        setPartnerAvatar(partnerAvatar); 
 
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
@@ -224,6 +224,7 @@ export default function ChatPage() {
     };
   }, [chatClient]); 
 
+  // 🛠️ NEW: Intercept global link clicks to block accidental login navigations
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
       if (status !== 'connected') return;
@@ -234,8 +235,12 @@ export default function ChatPage() {
         e.stopPropagation(); 
         const href = target.getAttribute('href');
         if (href) {
-          setPendingRoute(href);
-          setShowLeaveConfirm(true); 
+          if (href.startsWith('/auth') && status === 'connected') {
+            setShowAuthWarning(true);
+          } else {
+            setPendingRoute(href);
+            setShowLeaveConfirm(true); 
+          }
         }
       }
     };
@@ -302,7 +307,7 @@ export default function ChatPage() {
     setPhotoRequestBusy(false);
     setIsPartnerTyping(false);
     setIsMatchWithFriend(false);
-    setPartnerAvatar(undefined); // 🛠️ FIX: Clear avatar state on next match
+    setPartnerAvatar(undefined); 
     clearPhotoRequestTimeout();
   };
 
@@ -433,6 +438,61 @@ export default function ChatPage() {
         </div>
       )}
 
+      {/* 🛠️ NEW: Auth Interruption Warning Modal */}
+      <AnimatePresence>
+        {showAuthWarning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[var(--card)] border border-[var(--border-color)] rounded-2xl p-6 max-w-sm w-full shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setShowAuthWarning(false)}
+                className="absolute top-4 right-4 p-1.5 text-[var(--text-muted)] hover:bg-[var(--background)] rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="w-12 h-12 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4">
+                <AlertTriangle className="w-6 h-6 text-yellow-500" />
+              </div>
+              
+              <h3 className="text-xl font-bold text-[var(--text-main)] mb-2">Wait! Don't lose your match.</h3>
+              <p className="text-[var(--text-muted)] text-sm leading-relaxed mb-6">
+                Navigating to the login screen will immediately disconnect your current stranger chat. 
+                <br/><br/>
+                <strong>Pro tip:</strong> Ask for their zQuab username before you leave so you can add them as a friend and continue in DMs later!
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => setShowAuthWarning(false)}
+                  className="w-full py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] font-bold rounded-xl hover:border-[var(--text-main)] transition-colors"
+                >
+                  Stay in Chat
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowAuthWarning(false);
+                    navigate('/auth');
+                  }}
+                  className="w-full py-3 bg-[#3B82F6] text-white font-bold rounded-xl hover:bg-blue-600 transition-colors shadow-sm"
+                >
+                  Leave & Log In
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showMobileMenu && (
           <>
@@ -460,7 +520,7 @@ export default function ChatPage() {
                   partnerCountry={partnerCountry} 
                   partnerUsername={partnerUsername}
                   partnerGender={partnerGender}
-                  partnerAvatar={partnerAvatar} // 🛠️ FIX: Passed to mobile connection card
+                  partnerAvatar={partnerAvatar} 
                   onAddFriend={handleAddFriend}
                   friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
                   isAlreadyFriend={isMatchWithFriend}
@@ -497,139 +557,139 @@ export default function ChatPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-  {showRulesModal && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-    >
-      <motion.div
-        initial={{ scale: 0.95, y: 20, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        exit={{ scale: 0.95, y: 20, opacity: 0 }}
-        className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-xl border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]"
-      >
-        <h3 className="text-3xl font-bold text-[var(--text-main)] text-center tracking-tight">
-          Community Guidelines
-        </h3>
-
-        <p className="text-sm text-[var(--text-muted)] text-center mt-3 mb-6 leading-relaxed">
-          Welcome to <strong>zQuab</strong>. Our goal is to help people have
-          genuine conversations in a respectful environment. Please read these
-          guidelines before starting your first chat.
-        </p>
-
-        <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
-
-          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <h4 className="font-semibold text-[var(--text-main)] mb-2">
-              Be Respectful
-            </h4>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              Treat everyone with respect. Harassment, bullying, hate speech,
-              discrimination, threats, or intentionally abusive behavior are
-              not allowed.
-            </p>
-          </div>
-
-          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <h4 className="font-semibold text-[var(--text-main)] mb-2">
-              Protect Your Privacy
-            </h4>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              Never share sensitive personal information such as your address,
-              passwords, financial information, government IDs, or anything
-              that could put you or someone else at risk.
-            </p>
-          </div>
-
-          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <h4 className="font-semibold text-[var(--text-main)] mb-2">
-              Image Sharing
-            </h4>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              Photos cannot be sent directly. The other person must explicitly
-              request an image before one can be shared. Never pressure anyone
-              into sharing photos.
-            </p>
-          </div>
-
-          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <h4 className="font-semibold text-[var(--text-main)] mb-2">
-              Illegal or Harmful Content
-            </h4>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              Do not use zQuab to promote illegal activities, exploit others,
-              distribute malicious content, engage in scams, impersonation,
-              fraud, or any activity that violates applicable laws.
-            </p>
-          </div>
-
-          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <h4 className="font-semibold text-[var(--text-main)] mb-2">
-              Anonymous, Not Unaccountable
-            </h4>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              zQuab is built for anonymous conversations, but violating these
-              guidelines may result in connection termination, temporary
-              restrictions, or permanent account action where applicable.
-            </p>
-          </div>
-
-          <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
-            <h4 className="font-semibold text-[var(--text-main)] mb-2">
-              Your Responsibility
-            </h4>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              You are responsible for your own conversations and the
-              information you choose to share. If someone makes you
-              uncomfortable, leave the conversation immediately.
-            </p>
-          </div>
-
-          <div className=" rounded-xl p-4">
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              By continuing, you confirm that you have read these Community
-              Guidelines and agree to follow them while using zQuab. You also
-              acknowledge that zQuab is intended for users who are at least
-              <strong> 18 years of age</strong>.
-            </p>
-          </div>
-
-        </div>
-
-        <label
-          onClick={() => setRulesAgreed(!rulesAgreed)}
-          className="flex items-center gap-3 cursor-pointer mb-6 group"
-        >
-          <div
-            className={`w-6 h-6 rounded-md border flex items-center justify-center ${
-              rulesAgreed
-                ? "bg-[#3B82F6] border-[#3B82F6]"
-                : "border-[var(--text-muted)]"
-            }`}
+        {showRulesModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
           >
-            {rulesAgreed && <Check className="w-4 h-4 text-white" />}
-          </div>
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-xl border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <h3 className="text-3xl font-bold text-[var(--text-main)] text-center tracking-tight">
+                Community Guidelines
+              </h3>
 
-          <span className="text-sm text-[var(--text-muted)] select-none">
-            I have read and agree to follow the Community Guidelines and Terms
-            of Service.
-          </span>
-        </label>
+              <p className="text-sm text-[var(--text-muted)] text-center mt-3 mb-6 leading-relaxed">
+                Welcome to <strong>zQuab</strong>. Our goal is to help people have
+                genuine conversations in a respectful environment. Please read these
+                guidelines before starting your first chat.
+              </p>
 
-        <button
-          onClick={handleAcceptRules}
-          disabled={!rulesAgreed}
-          className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold disabled:opacity-50 transition-opacity"
-        >
-          I Understand & Agree
-        </button>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+              <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+                  <h4 className="font-semibold text-[var(--text-main)] mb-2">
+                    Be Respectful
+                  </h4>
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    Treat everyone with respect. Harassment, bullying, hate speech,
+                    discrimination, threats, or intentionally abusive behavior are
+                    not allowed.
+                  </p>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+                  <h4 className="font-semibold text-[var(--text-main)] mb-2">
+                    Protect Your Privacy
+                  </h4>
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    Never share sensitive personal information such as your address,
+                    passwords, financial information, government IDs, or anything
+                    that could put you or someone else at risk.
+                  </p>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+                  <h4 className="font-semibold text-[var(--text-main)] mb-2">
+                    Image Sharing
+                  </h4>
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    Photos cannot be sent directly. The other person must explicitly
+                    request an image before one can be shared. Never pressure anyone
+                    into sharing photos.
+                  </p>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+                  <h4 className="font-semibold text-[var(--text-main)] mb-2">
+                    Illegal or Harmful Content
+                  </h4>
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    Do not use zQuab to promote illegal activities, exploit others,
+                    distribute malicious content, engage in scams, impersonation,
+                    fraud, or any activity that violates applicable laws.
+                  </p>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+                  <h4 className="font-semibold text-[var(--text-main)] mb-2">
+                    Anonymous, Not Unaccountable
+                  </h4>
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    zQuab is built for anonymous conversations, but violating these
+                    guidelines may result in connection termination, temporary
+                    restrictions, or permanent account action where applicable.
+                  </p>
+                </div>
+
+                <div className="bg-[var(--background)] p-4 rounded-xl border border-[var(--border-color)]">
+                  <h4 className="font-semibold text-[var(--text-main)] mb-2">
+                    Your Responsibility
+                  </h4>
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    You are responsible for your own conversations and the
+                    information you choose to share. If someone makes you
+                    uncomfortable, leave the conversation immediately.
+                  </p>
+                </div>
+
+                <div className=" rounded-xl p-4">
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed">
+                    By continuing, you confirm that you have read these Community
+                    Guidelines and agree to follow them while using zQuab. You also
+                    acknowledge that zQuab is intended for users who are at least
+                    <strong> 18 years of age</strong>.
+                  </p>
+                </div>
+
+              </div>
+
+              <label
+                onClick={() => setRulesAgreed(!rulesAgreed)}
+                className="flex items-center gap-3 cursor-pointer mb-6 group"
+              >
+                <div
+                  className={`w-6 h-6 rounded-md border flex items-center justify-center ${
+                    rulesAgreed
+                      ? "bg-[#3B82F6] border-[#3B82F6]"
+                      : "border-[var(--text-muted)]"
+                  }`}
+                >
+                  {rulesAgreed && <Check className="w-4 h-4 text-white" />}
+                </div>
+
+                <span className="text-sm text-[var(--text-muted)] select-none">
+                  I have read and agree to follow the Community Guidelines and Terms
+                  of Service.
+                </span>
+              </label>
+
+              <button
+                onClick={handleAcceptRules}
+                disabled={!rulesAgreed}
+                className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold disabled:opacity-50 transition-opacity"
+              >
+                I Understand & Agree
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showLoginPrompt && (
@@ -641,7 +701,15 @@ export default function ChatPage() {
               <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Create an Account</h3>
               <p className="text-[var(--text-muted)] mb-8 text-sm">You are browsing as a guest. Create an account to add friends and save connections.</p>
               <div className="flex flex-col gap-3">
-                <button onClick={() => navigate('/auth')} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold">Log In / Sign Up</button>
+                {/* 🛠️ NEW: Intercept explicit log in button press to spawn warning */}
+                <button onClick={() => {
+                  setShowLoginPrompt(false);
+                  if (status === 'connected') {
+                    setShowAuthWarning(true);
+                  } else {
+                    navigate('/auth');
+                  }
+                }} className="w-full py-4 bg-[#3B82F6] text-white rounded-xl font-bold">Log In / Sign Up</button>
                 <button onClick={() => setShowLoginPrompt(false)} className="w-full py-4 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] rounded-xl font-bold">Maybe Later</button>
               </div>
             </motion.div>
@@ -738,7 +806,7 @@ export default function ChatPage() {
           partnerCountry={partnerCountry} 
           partnerUsername={partnerUsername}
           partnerGender={partnerGender}
-          partnerAvatar={partnerAvatar} // 🛠️ FIX: Passed to desktop connection card
+          partnerAvatar={partnerAvatar} 
           onAddFriend={handleAddFriend}
           friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
           isAlreadyFriend={isMatchWithFriend}

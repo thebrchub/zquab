@@ -72,14 +72,16 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
           className={`max-w-[75%] md:max-w-[65%] flex flex-col relative
             ${emojiOnly 
               ? 'bg-transparent text-4xl leading-tight'
-              : `rounded-2xl px-4 py-2.5 shadow-sm text-sm md:text-base leading-relaxed
+              // 🛠️ FIX: Bumped typography to text-base (16px) for mobile and 17px for desktop
+              : `rounded-2xl px-4 py-2.5 shadow-sm text-base md:text-[17px] leading-relaxed
                  ${isOwn 
                    ? 'bg-[#3B82F6] text-white rounded-tr-sm' 
                    : 'bg-[var(--card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-tl-sm'
                  }`
             }`}
         >
-          <p className="break-words break-all whitespace-pre-wrap">{displayText}</p>
+          {/* 🛠️ FIX: Removed 'break-all' so whole words wrap naturally to the next line */}
+          <p className="break-words whitespace-pre-wrap">{displayText}</p>
           
           {formattedTime && !emojiOnly && (
             <div className={`flex items-center gap-1.5 mt-1 text-[10px] uppercase font-bold self-end
