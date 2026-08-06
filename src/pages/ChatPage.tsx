@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
+import { createPortal } from 'react-dom';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
@@ -493,6 +494,7 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
+      {createPortal(
       <AnimatePresence>
         {showMobileMenu && (
           <>
@@ -507,7 +509,7 @@ export default function ChatPage() {
               className="fixed top-0 right-0 h-full w-[85vw] max-w-[340px] bg-[var(--background)] z-[9999] shadow-2xl flex flex-col border-l border-[var(--border-color)]" 
             >
               <div className="p-4 flex justify-between items-center border-b border-[var(--border-color)]">
-                <h3 className="font-bold text-[var(--text-main)]">Dashboard</h3>
+                <h3 className="font-bold text-[var(--text-main)]">Match Info</h3>
                 <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-[var(--card)] rounded-full border border-[var(--border-color)] text-[var(--text-main)] active:scale-95 transition-transform">
                   <X className="w-5 h-5" />
                 </button>
@@ -530,7 +532,9 @@ export default function ChatPage() {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+      )}
 
       <AnimatePresence>
         {showLeaveConfirm && (
@@ -556,6 +560,7 @@ export default function ChatPage() {
         )}
       </AnimatePresence>
 
+      {createPortal(
       <AnimatePresence>
         {showRulesModal && (
           <motion.div
@@ -689,7 +694,9 @@ export default function ChatPage() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+      )}
 
       <AnimatePresence>
         {showLoginPrompt && (
