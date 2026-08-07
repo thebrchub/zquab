@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Loader2, ChevronDown, Check, MapPin, Lock, User, RefreshCw } from 'lucide-react'; // 🛠️ Added RefreshCw icon
+import { AlertCircle, Loader2, ChevronDown, Check, MapPin, Lock, User, RefreshCw, X } from 'lucide-react'; // 🛠️ Added X icon
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiClient } from '../api/client'; 
+import { usersApi } from '../api/users';
 import { useAuth } from '../context/AuthContext'; 
 import { ALL_COUNTRIES } from '../constants/countries'; 
 
@@ -12,7 +11,6 @@ import { lorelei } from '@dicebear/collection';
 const GENDER_OPTIONS = ['Prefer not to say', 'Male', 'Female', 'Other'];
 
 export default function OnboardingPage() {
-  const navigate = useNavigate();
   const { refreshSession } = useAuth(); 
   const [isLoading, setIsLoading] = useState(false);
   
@@ -28,21 +26,55 @@ export default function OnboardingPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [zAvatarRequested, setZAvatarRequested] = useState(false);
-  
-  // 🛠️ NEW: State to track rerolls
   const [avatarVariant, setAvatarVariant] = useState(0);
 
-  // 🛠️ UPDATED: Live zAvatar Preview Generation (Includes the variant number!)
+  // 🛠️ NEW: States for real-time validation and inline errors
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const avatarPreview = useMemo(() => {
     if (!username || gender === 'Prefer not to say' || !zAvatarRequested) return null;
-    
-    // 🛠️ FIX: Removed ${gender} from the seed so it's purely based on the variant!
     return createAvatar(lorelei, {
       seed: `${username}-${avatarVariant}`,
       size: 128,
       backgroundColor: ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
     }).toDataUri();
   }, [username, gender, zAvatarRequested, avatarVariant]);
+
+  // 🛠️ NEW: The Debouncer logic for real-time checking
+  // 🛠️ NEW: The Debouncer logic using your custom usersApi
+  useEffect(() => {
+    if (!username) {
+      setUsernameStatus('idle');
+      setUsernameError(null);
+      return;
+    }
+
+    if (username.length < 3) {
+      setUsernameStatus('idle');
+      setUsernameError('Username must be at least 3 characters.');
+      return;
+    }
+
+    setUsernameStatus('checking');
+    setUsernameError(null);
+    setSubmitError(null);
+
+    const debounceTimer = setTimeout(async () => {
+      try {
+        // 🛠️ UPDATED: Using your abstracted API layer!
+        await usersApi.checkUsername(username);
+        setUsernameStatus('available');
+      } catch (error: any) {
+        // If the API returns a 409 or similar error, it's taken
+        setUsernameStatus('taken');
+        setUsernameError('This username is already taken.');
+      }
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [username]);
 
   useEffect(() => {
     const fetchCountry = async () => {
@@ -77,6 +109,7 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null); 
     setIsLoading(true);
     
     try {
@@ -85,10 +118,9 @@ export default function OnboardingPage() {
         name: username, 
       };
 
-      // 🛠️ UPDATED: Ensure the final payload uses the exact same variant they rolled
       if (zAvatarRequested && gender !== 'Prefer not to say') {
         payload.avatar_url = createAvatar(lorelei, {
-          seed: `${username}-${avatarVariant}`, // 🛠️ FIX: Match the preview seed here too!
+          seed: `${username}-${avatarVariant}`,
           size: 128,
           backgroundColor: ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"]
         }).toDataUri();
@@ -96,23 +128,22 @@ export default function OnboardingPage() {
 
       if (bio.trim()) payload.bio = bio.trim();
       if (age.trim()) payload.age = age.trim();
+      if (country && country !== 'Detecting...') payload.country = country;
       
-      if (country && country !== 'Detecting...') {
-        payload.country = country;
-      }
-
       payload.gender = gender === 'Prefer not to say' ? 'Any' : gender;
 
-      await apiClient.patch('/users/me', payload);
-      await refreshSession();
-      navigate('/home'); 
+      await usersApi.updateMePartial(payload);
+      refreshSession().catch(() => {});
+      window.location.replace('/home'); 
 
     } catch (error: any) {
       console.error(error);
+      // 🛠️ UPDATED: No more alerts, strictly inline beautiful errors
       if (error.response?.status === 409) {
-        alert("That username is either already taken, or your profile is already permanently set up! Try refreshing the page.");
+        setSubmitError("That username is already taken, or your profile is already permanently set up.");
+        setUsernameStatus('taken');
       } else {
-        alert(error.response?.data?.error || "Failed to save profile. Please try again.");
+        setSubmitError(error.response?.data?.error || "Failed to save profile. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -148,6 +179,23 @@ export default function OnboardingPage() {
           onSubmit={handleSubmit} 
           className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-6 sm:p-8 shadow-2xl space-y-6"
         >
+
+          {/* 🛠️ NEW: Global Form Error Box */}
+          <AnimatePresence>
+            {submitError && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 mb-2">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-semibold text-red-500 leading-tight">{submitError}</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           <div className="flex flex-col items-center justify-center mb-6">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[var(--background)] border-2 border-[var(--border-color)] flex items-center justify-center overflow-hidden shadow-sm transition-all duration-300">
@@ -165,13 +213,12 @@ export default function OnboardingPage() {
                 <button 
                   type="button" 
                   onClick={() => { setZAvatarRequested(true); setAvatarVariant(0); }}
-                  disabled={!username}
+                  disabled={!username || usernameStatus === 'taken'}
                   className="px-5 py-2.5 bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6] hover:text-white rounded-full text-xs font-bold transition-colors disabled:opacity-50"
                 >
                   Generate zAvatar
                 </button>
               ) : (
-                // 🛠️ UPDATED: Added the Reroll functionality here!
                 <div className="flex items-center gap-6">
                   <button 
                     type="button" 
@@ -205,16 +252,34 @@ export default function OnboardingPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                 placeholder="shadow_ninja"
-                className="w-full pl-10 pr-4 py-3.5 bg-[var(--background)] border border-[var(--border-color)] rounded-xl text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all"
+                className={`w-full pl-10 pr-12 py-3.5 bg-[var(--background)] border ${
+                  usernameStatus === 'taken' ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 
+                  usernameStatus === 'available' ? 'border-green-500 focus:ring-green-500 focus:border-green-500' : 
+                  'border-[var(--border-color)] focus:ring-[#3B82F6]'
+                } rounded-xl text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 transition-all`}
                 required
                 maxLength={30}
               />
+              {/* 🛠️ NEW: Dynamic Icons based on status */}
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                {usernameStatus === 'checking' && <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin" />}
+                {usernameStatus === 'available' && <Check className="w-5 h-5 text-green-500" />}
+                {usernameStatus === 'taken' && <X className="w-5 h-5 text-red-500" />}
+              </div>
             </div>
-            <div className="flex items-start gap-1.5 mt-1.5 ml-1">
-              <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs font-semibold text-orange-500 leading-tight">
-                Choose carefully. Your username is permanent and cannot be changed later.
-              </p>
+            
+            {/* 🛠️ NEW: Dynamic subtext switching between warning and explicit error */}
+            <div className="h-4 mt-1.5 ml-1">
+              {usernameError ? (
+                <p className="text-xs font-bold text-red-500 animate-in slide-in-from-top-1">{usernameError}</p>
+              ) : (
+                <div className="flex items-start gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs font-semibold text-orange-500 leading-tight">
+                    Choose carefully. Your username is permanent.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -328,7 +393,8 @@ export default function OnboardingPage() {
 
           <button
             type="submit"
-            disabled={isLoading || !username}
+            // 🛠️ UPDATED: Disable if currently checking or if already taken
+            disabled={isLoading || !username || usernameStatus === 'checking' || usernameStatus === 'taken'}
             className="w-full py-4 mt-2 bg-[#3B82F6] hover:bg-blue-600 active:scale-[0.98] text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 disabled:opacity-70 disabled:active:scale-100"
           >
             {isLoading ? (
