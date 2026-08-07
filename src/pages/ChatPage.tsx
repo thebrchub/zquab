@@ -4,13 +4,14 @@ import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
 import TypingIndicator from '../components/chat/TypingIndicator';
 // 🛠️ NEW: Imported AlertTriangle for the warning modal
-import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, ShieldAlert, AlertTriangle, ShieldCheck, Users, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Helmet } from 'react-helmet-async';
+
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
@@ -418,6 +419,28 @@ export default function ChatPage() {
     }
   };
 
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+
+  // 🛠️ NEW: Check for the onboarding flag when the page loads
+  useEffect(() => {
+    const shouldShowWelcome = sessionStorage.getItem('zquab_show_welcome');
+    if (shouldShowWelcome) {
+      setShowWelcomeModal(true);
+      // Immediately delete it so it never shows on refresh again!
+      sessionStorage.removeItem('zquab_show_welcome');
+    }
+  }, []);
+
+  // 🛠️ DEV TOOL: Listens for the Mock Welcome button from DevMenu
+  useEffect(() => {
+    if (!isDev) return;
+    const handleMockWelcome = () => {
+      setShowWelcomeModal(true);
+    };
+    window.addEventListener('dev_mock_welcome', handleMockWelcome);
+    return () => window.removeEventListener('dev_mock_welcome', handleMockWelcome);
+  }, [isDev]);
+
   return (
     <>
 
@@ -590,6 +613,71 @@ export default function ChatPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {createPortal(
+      <AnimatePresence>
+        {showWelcomeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-md border border-[var(--border-color)] shadow-2xl text-center relative overflow-hidden"
+            >
+              <h3 className="text-3xl font-black text-[var(--text-main)] mb-2 tracking-tight mt-2">
+                Welcome to zQuab!
+              </h3>
+              <p className="text-[var(--text-muted)] mb-8 text-sm px-4 leading-relaxed">
+                Your identity is set. You're officially ready to dive into the anonymous world.
+              </p>
+
+              <div className="space-y-4 text-left mb-6">
+                <div className="flex items-start gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                  <div className="bg-green-500/10 p-2.5 rounded-lg mt-0.5">
+                    <Users className="w-5 h-5 text-green-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[var(--text-main)]">Connect Instantly</h4>
+                    <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">Match with strangers globally in seconds. No waiting, just real conversations.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                  <div className="bg-purple-500/10 p-2.5 rounded-lg mt-0.5">
+                    <Star className="w-5 h-5 text-purple-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[var(--text-main)]">Build Reputation</h4>
+                    <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">Be respectful, have great chats, add friends, and level up your profile.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🛠️ NEW: Privacy Assurance Note */}
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <ShieldCheck className="w-4 h-4 text-[var(--text-muted)]" />
+                <span className="text-xs font-semibold text-[var(--text-muted)]">
+                  Your privacy matters to us. Chats remain completely anonymous.
+                </span>
+              </div>
+
+              <button
+                onClick={() => setShowWelcomeModal(false)}
+                className="w-full py-4 bg-[#3B82F6] hover:bg-blue-600 active:scale-95 text-white rounded-xl font-bold transition-all"
+              >
+                Let's Start Chatting
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>,
+      document.body
+)}
 
       {createPortal(
       <AnimatePresence>

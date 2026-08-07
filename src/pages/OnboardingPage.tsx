@@ -134,7 +134,12 @@ export default function OnboardingPage() {
 
       await usersApi.updateMePartial(payload);
       refreshSession().catch(() => {});
-      window.location.replace('/home'); 
+      
+      // 🛠️ FIX 1: Set a one-time trigger flag
+      sessionStorage.setItem('zquab_show_welcome', 'true');
+      
+      // 🛠️ FIX 2: Redirect directly to the chat page!
+      window.location.replace('/chat'); 
 
     } catch (error: any) {
       console.error(error);

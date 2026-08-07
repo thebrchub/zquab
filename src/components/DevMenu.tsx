@@ -25,6 +25,12 @@ export default function DevMenu() {
     setIsOpen(false);
   };
 
+  // 🛠️ NEW: Function to fire a global welcome modal event
+  const triggerWelcomeModal = () => {
+    window.dispatchEvent(new CustomEvent('dev_mock_welcome'));
+    setIsOpen(false);
+  };
+
   return (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col items-end gap-2">
       {isOpen && (
@@ -53,8 +59,14 @@ export default function DevMenu() {
             🔍 UI: Search
           </Link>
 
-          {/* 🛠️ NEW: Mock Disconnect Button */}
-          <div className="mt-2 pt-2 border-t border-gray-700">
+          {/* 🛠️ NEW: Dev Actions Menu */}
+          <div className="mt-2 pt-2 border-t border-gray-700 space-y-1">
+            <button 
+              onClick={triggerWelcomeModal} 
+              className="w-full text-left text-sm font-medium text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 p-2 rounded-lg transition-colors"
+            >
+              ✨ Show Welcome Modal
+            </button>
             <button 
               onClick={triggerMockDisconnect} 
               className="w-full text-left text-sm font-medium text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 p-2 rounded-lg transition-colors"
