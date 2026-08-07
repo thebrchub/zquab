@@ -323,6 +323,19 @@ export default function ChatRoom({
       return;
     }
 
+    if (lastMessage.type === 'error') {
+      // Server rejected the last action (e.g. SERVER_BUSY, NOT_A_MEMBER). No
+      // message id is included, so we can't target the specific bubble —
+      // surface it as a system message instead of failing silently.
+      setMessages(prev => [...prev, {
+        id: `sys-err-${Date.now()}`,
+        content: lastMessage.payload?.message || 'Something went wrong. Please try again.',
+        isSystem: true,
+        isOwn: false,
+      }]);
+      return;
+    }
+
     if (!roomId) return;
 
     const eventRoomId = lastMessage.payload?.roomId || lastMessage.payload?.room_id;

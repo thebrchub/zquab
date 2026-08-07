@@ -19,6 +19,7 @@ const safeLookup = (name: string, fallbackName: string) => {
 const Envelope = root.lookupType('chatpb.Envelope');
 const ChatMessageProto = root.lookupType('chatpb.ChatMessage');
 const ReceiptProto = safeLookup('chatpb.Receipt', 'Receipt');
+const SystemEventProto = safeLookup('chatpb.SystemEvent', 'SystemEvent');
 const PhotoRequestProto = safeLookup('eventspb.PhotoRequest', 'PhotoRequest');
 const PhotoResponseProto = safeLookup('eventspb.PhotoResponse', 'PhotoResponse');
 const PhotoReadyProto = safeLookup('eventspb.PhotoReady', 'PhotoReady');
@@ -94,6 +95,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
             } else if (t === 'unfriend' && UnfriendedProto) {
               // 🛠️ NEW: Decode the Unfriend event payload
               decodedPayload = UnfriendedProto.decode(envelope.payload);
+            } else if (t === 'error' && SystemEventProto) {
+              // Server-side rejection (e.g. SERVER_BUSY, NOT_A_MEMBER) — code+message only.
+              decodedPayload = SystemEventProto.decode(envelope.payload);
             } else if (t === 'message_read' || t === 'message_delivered_receipt' || t === 'message_receipt' || t === 'receipt') {
               if (ReceiptProto) {
                 try {
