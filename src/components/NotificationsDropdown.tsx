@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, X, Loader2 } from 'lucide-react';
 import { friendsApi } from '../api/friends';
@@ -23,37 +24,59 @@ export default function NotificationsDropdown({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // 🛠️ FIX 1: Create a local registry of users we have already processed
+  const [processedUsers, setProcessedUsers] = useState<Set<string>>(new Set());
+
   if (!isOpen) return null;
 
+  // 🛠️ FIX 2: Filter the incoming context data against our local registry
+  const visibleRequests = friendRequests.filter(req => !processedUsers.has(req.username));
+
   const handleAcceptRequest = async (e: React.MouseEvent, username: string) => {
-    // 🛠️ THE FIX: Prevent this click from triggering the parent row's navigation!
     e.preventDefault();
     e.stopPropagation(); 
+    
+    // 🛠️ FIX 3: Instantly hide the UI by adding to local registry
+    setProcessedUsers(prev => new Set(prev).add(username));
+    
     try {
       await friendsApi.acceptRequest(username);
+      // Still update global state, but our local registry protects us from stale bounces
       setFriendRequests((prev) => prev.filter(req => req.username !== username));
     } catch (error) {
       console.error('Failed to accept request:', error);
+      // Optional: If it truly fails, remove them from the registry so it reappears
+      setProcessedUsers(prev => {
+        const next = new Set(prev);
+        next.delete(username);
+        return next;
+      });
     }
   };
 
   const handleRejectRequest = async (e: React.MouseEvent, username: string) => {
     e.preventDefault();
     e.stopPropagation(); 
+    
+    // 🛠️ FIX 3: Instantly hide the UI by adding to local registry
+    setProcessedUsers(prev => new Set(prev).add(username));
+
     try {
       await friendsApi.rejectRequest(username);
       setFriendRequests((prev) => prev.filter(req => req.username !== username));
     } catch (error) {
       console.error('Failed to reject request:', error);
+      setProcessedUsers(prev => {
+        const next = new Set(prev);
+        next.delete(username);
+        return next;
+      });
     }
   };
 
   const handleRowClick = () => {
     onClose();
-    // 🛠️ THE FIX: Do absolutely nothing if the user is in a stranger chat
     if (location.pathname === '/chat') return;
-    
-    // 🛠️ THE FIX: Navigate to the unified inbox instead of a direct user route
     navigate('/home');
   };
 
@@ -61,9 +84,10 @@ export default function NotificationsDropdown({
     <div className="fixed top-[72px] left-4 right-4 sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:mt-3 sm:w-80 bg-[var(--card)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden flex flex-col z-50">
       <div className="p-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--background)]">
         <h3 className="font-bold text-[var(--text-main)] text-sm uppercase tracking-wider">Notifications</h3>
-        {isFullUser && friendRequests.length > 0 && (
+     
+        {isFullUser && visibleRequests.length > 0 && (
           <span className="bg-[#3B82F6] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-            {friendRequests.length} New
+            {visibleRequests.length} New
           </span>
         )}
       </div>
@@ -77,13 +101,14 @@ export default function NotificationsDropdown({
           <div className="p-8 flex justify-center">
             <Loader2 className="w-6 h-6 text-[#3B82F6] animate-spin" />
           </div>
-        ) : friendRequests.length === 0 ? (
+        ) : visibleRequests.length === 0 ? (  
           <div className="p-8 text-center">
             <p className="text-sm font-medium text-[var(--text-muted)]">No new requests</p>
           </div>
         ) : (
           <div className="divide-y divide-[var(--border-color)]">
-            {friendRequests.map((req) => (
+         
+            {visibleRequests.map((req) => (
               <div 
                 key={req.request_id || req.username}
                 onClick={handleRowClick}
