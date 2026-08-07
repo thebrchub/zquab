@@ -117,9 +117,24 @@ export default function ChatRoom({
   const isMyTypingStateRef = useRef(false);
 
   const sentMessageIdsRef = useRef<Set<string>>(new Set());
+  const activeRoomIdRef = useRef(roomId);
+  const roomGenerationRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  useEffect(() => {
+    activeRoomIdRef.current = roomId;
+    roomGenerationRef.current += 1;
+    sentMessageIdsRef.current.clear();
+    loadingMoreRef.current = false;
+    setMessages([]);
+    setLoading(!isDevMode);
+    setLoadingMore(false);
+    setHasMore(true);
+    setError('');
+  }, [roomId, isDevMode]);
 
   const handleImageClick = useCallback((url: string) => setViewingImage(url), []);
 
@@ -147,6 +162,12 @@ export default function ChatRoom({
       photoRequestTimeoutRef.current = null;
     }
   }, []);
+
+  useEffect(() => () => {
+    clearPhotoRequestTimeout();
+    if (partnerTypingTimeoutRef.current) window.clearTimeout(partnerTypingTimeoutRef.current);
+    if (myTypingTimeoutRef.current) window.clearTimeout(myTypingTimeoutRef.current);
+  }, [clearPhotoRequestTimeout]);
 
   const sharePhoto = useCallback(async (file: File) => {
     if (!roomId) throw new Error('No room selected');
@@ -209,9 +230,13 @@ export default function ChatRoom({
 
     if (!roomId) return;
     
+    const generation = roomGenerationRef.current;
+    let cancelled = false;
+
     const fetchHistory = async () => {
       try {
         const history = await roomsApi.getMessages(roomId);
+        if (cancelled || generation !== roomGenerationRef.current || activeRoomIdRef.current !== roomId) return;
         const myId = (user as any)?.user_id || (user as any)?.id;
 
         const formattedHistory = history.map((msg: any) => {
@@ -244,30 +269,46 @@ export default function ChatRoom({
         
         sessionStorage.setItem(`opts_${roomId}`, JSON.stringify(pendingOpts));
 
-        setMessages([...formattedHistory.reverse(), ...pendingOpts]);
-        if (history.length < 50) setHasMore(false);
+        setMessages(previousMessages => {
+          const historyAndPending = [...formattedHistory.reverse(), ...pendingOpts];
+          const knownIds = new Set(historyAndPending.map(message => message.id));
+          return [...historyAndPending, ...previousMessages.filter(message => !knownIds.has(message.id))];
+        });
+        setHasMore(history.length >= 50);
         
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 100);
       } catch (err: any) {
-        setError(err.message || 'Failed to load chat');
+        if (!cancelled && generation === roomGenerationRef.current && activeRoomIdRef.current === roomId) {
+          setError(err.message || 'Failed to load chat');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled && generation === roomGenerationRef.current && activeRoomIdRef.current === roomId) {
+          setLoading(false);
+        }
       }
     };
 
     fetchHistory();
-    
-    if (isConnected) {
+    return () => { cancelled = true; };
+  }, [roomId, isDevMode, user]);
+
+  useEffect(() => {
+    if (!isDevMode && roomId && isConnected) {
       sendMessage('join_room', undefined, roomId);
     }
-  }, [roomId, isConnected, isDevMode, user]);
+  }, [roomId, isConnected, isDevMode, sendMessage]);
 
   useEffect(() => {
     if (isDevMode || !lastMessage) return;
 
-    if (lastMessage.type === 'send_confirm') {
+    if (lastMessage.type === 'send_confirm' || lastMessage.type === 'message_sent_confirm') {
+      const confirmedId = lastMessage.id || lastMessage.payload?.messageId || lastMessage.payload?.message_id;
+      if (confirmedId) {
+        sentMessageIdsRef.current.delete(String(confirmedId));
+        setMessages(prev => prev.map(message => message.id === String(confirmedId) ? { ...message, status: 'delivered' } : message));
+      }
       return;
     }
 
@@ -316,9 +357,10 @@ export default function ChatRoom({
         return;
       }
 
-      if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered') {
+      if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered' || lastMessage.type === 'message_delivered') {
         if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
           sentMessageIdsRef.current.delete(lastMessage.id);
+          setMessages(prev => prev.map(message => message.id === lastMessage.id ? { ...message, status: 'delivered' } : message));
           return;
         }
 
@@ -380,11 +422,12 @@ export default function ChatRoom({
         setIsPartnerTyping(false);
         if (partnerTypingTimeoutRef.current) clearTimeout(partnerTypingTimeoutRef.current);
       }
-      else if (lastMessage.type === 'read') {
+      else if (lastMessage.type === 'read' || lastMessage.type === 'message_read') {
         const myId = (user as any)?.user_id || (user as any)?.id;
-        const readerId = lastMessage.sender_id || lastMessage.from;
+        const readerId = lastMessage.sender_id || lastMessage.from || lastMessage.payload?.userId || lastMessage.payload?.user_id;
         if (readerId && myId && readerId !== myId) {
-          setMessages(prev => prev.map(m => (m.isOwn && m.status !== 'read') ? { ...m, status: 'read' } : m));
+          const readMessageId = lastMessage.payload?.messageId || lastMessage.payload?.message_id;
+          setMessages(prev => prev.map(m => (m.isOwn && m.status !== 'read' && (!readMessageId || m.id === readMessageId)) ? { ...m, status: 'read' } : m));
         }
       }
     }
@@ -396,11 +439,16 @@ export default function ChatRoom({
     const observer = new IntersectionObserver(
       async (entries) => {
         const currentMessages = messagesRef.current;
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading && currentMessages.length > 0) {
+        if (entries[0].isIntersecting && hasMore && !loadingMoreRef.current && !loading && currentMessages.length > 0 && roomId) {
+          loadingMoreRef.current = true;
           setLoadingMore(true);
           try {
             const oldestId = currentMessages[0].id;
+            const previousScrollHeight = scrollRef.current?.scrollHeight ?? 0;
+            const previousScrollTop = scrollRef.current?.scrollTop ?? 0;
+            const generation = roomGenerationRef.current;
             const olderMessages = await roomsApi.getMessages(roomId!, oldestId);
+            if (generation !== roomGenerationRef.current || activeRoomIdRef.current !== roomId) return;
             if (olderMessages.length < 50) setHasMore(false);
             
             const myId = (user as any)?.user_id || (user as any)?.id;
@@ -418,10 +466,20 @@ export default function ChatRoom({
               };
             });
 
-            setMessages(prev => [...formattedOlder.reverse(), ...prev]);
+            setMessages(prev => {
+              const existingIds = new Set(prev.map(message => message.id));
+              const uniqueOlder = formattedOlder.reverse().filter((message: any) => !existingIds.has(message.id));
+              return [...uniqueOlder, ...prev];
+            });
+            window.requestAnimationFrame(() => {
+              if (scrollRef.current) {
+                scrollRef.current.scrollTop = previousScrollTop + (scrollRef.current.scrollHeight - previousScrollHeight);
+              }
+            });
           } catch (err) {
             console.error('Failed to load older messages');
           } finally {
+            loadingMoreRef.current = false;
             setLoadingMore(false);
           }
         }
@@ -517,21 +575,21 @@ export default function ChatRoom({
 
   const handleDeclinePhotoRequest = async () => {
     if (!roomId) return;
-    setIncomingPhotoRequest(false);
     try {
-      await fetch(`${API_BASE}/api/v1/match/photo/respond`, {
+      const response = await fetch(`${API_BASE}/api/v1/match/photo/respond`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ room_id: roomId, accept: false }),
       });
-    } catch {
-      // ignore network errors and keep the UI consistent
+      if (!response.ok) throw new Error('Unable to decline photo request');
+      setIncomingPhotoRequest(false);
+    } catch (error) {
+      setMessages(prev => [...prev, { id: `sys-pr-error-${Date.now()}`, content: error instanceof Error ? error.message : 'Unable to decline photo request.', isSystem: true, isOwn: false }]);
     }
   };
 
   const handleAcceptPhotoRequest = () => {
-    setIncomingPhotoRequest(false);
     photoFileInputRef.current?.click();
   };
 
@@ -539,6 +597,7 @@ export default function ChatRoom({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    setIncomingPhotoRequest(false);
 
     const localPreviewUrl = URL.createObjectURL(file);
     const tempId = `msg-img-${Date.now()}`;

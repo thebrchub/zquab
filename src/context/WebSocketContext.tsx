@@ -38,6 +38,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [lastMessage, setLastMessage] = useState<any | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const isProviderMountedRef = useRef(false);
 
   const connect = () => {
     if (import.meta.env.DEV || window.location.hostname === 'localhost') {
@@ -51,6 +52,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     ws.binaryType = 'arraybuffer'; 
 
     ws.onopen = () => {
+      if (!isProviderMountedRef.current || wsRef.current !== ws) {
+        ws.close();
+        return;
+      }
       console.log('WebSocket connected');
       setIsConnected(true);
       
@@ -127,6 +132,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
 
     ws.onclose = () => {
+      if (!isProviderMountedRef.current || wsRef.current !== ws) return;
       console.log('WebSocket disconnected. Reconnecting in 3s...');
       setIsConnected(false);
       reconnectTimeoutRef.current = window.setTimeout(connect, 3000);
@@ -141,8 +147,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    isProviderMountedRef.current = true;
     connect();
     return () => {
+      isProviderMountedRef.current = false;
       if (wsRef.current) wsRef.current.close();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
