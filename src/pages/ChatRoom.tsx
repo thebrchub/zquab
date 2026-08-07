@@ -123,6 +123,7 @@ export default function ChatRoom({
   const activeRoomIdRef = useRef(roomId);
   const roomGenerationRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const initialScrollComplete = useRef(false);
 
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -132,6 +133,10 @@ export default function ChatRoom({
     roomGenerationRef.current += 1;
     sentMessageIdsRef.current.clear();
     loadingMoreRef.current = false;
+    
+    // 🛠️ FIX 2: Reset the lock when changing rooms!
+    initialScrollComplete.current = false; 
+    
     setMessages([]);
     setLoading(!isDevMode);
     setLoadingMore(false);
@@ -275,8 +280,15 @@ export default function ChatRoom({
         });
         setHasMore(history.length >= 50);
         
+        // 🛠️ FIX 3a: Scroll to bottom, THEN unlock the observer
         setTimeout(() => {
-          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+          // Give the browser 50ms to process the scroll before unlocking pagination
+          setTimeout(() => {
+            initialScrollComplete.current = true;
+          }, 50);
         }, 100);
       } catch (err: any) {
         if (!cancelled && generation === roomGenerationRef.current && activeRoomIdRef.current === roomId) {
@@ -438,7 +450,10 @@ export default function ChatRoom({
     const observer = new IntersectionObserver(
       async (entries) => {
         const currentMessages = messagesRef.current;
-        if (entries[0].isIntersecting && hasMore && !loadingMoreRef.current && !loading && currentMessages.length > 0 && roomId) {
+        
+        // 🛠️ FIX 3b: Add `initialScrollComplete.current` to the end of this if-statement!
+        if (entries[0].isIntersecting && hasMore && !loadingMoreRef.current && !loading && currentMessages.length > 0 && roomId && initialScrollComplete.current) {
+          
           loadingMoreRef.current = true;
           setLoadingMore(true);
           try {
