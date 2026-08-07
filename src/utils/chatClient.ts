@@ -63,7 +63,7 @@ export class ChatClient {
 
   async start() {
     try {
-      await this.detectLocation(); // 🛠️ ADDED AWAIT: Ensures location is ready before connecting!
+      await this.detectLocation(); 
       await this.loadProtos();
       await this.ensureGuest();
       this.connect();
@@ -75,22 +75,19 @@ export class ChatClient {
 
   private async detectLocation() {
     try {
-      // 1. Attempt to fetch the registered user's profile to get their DB country
       const res = await fetch(`${API_BASE}/api/v1/users/me`, { credentials: 'include' });
       if (res.ok) {
         const profile = await res.json();
-        // If they are a registered user and have a country saved, use it!
         if (profile && profile.country && !profile.is_guest) {
           this.locationCode = profile.country;
           this.callbacks.onLocationDetected?.({ name: profile.country, code: profile.country });
-          return; // Exit early, no need for the IP API!
+          return; 
         }
       }
     } catch (e) {
       // Silently catch network/auth errors and proceed to the guest fallback
     }
 
-    // 2. Fallback to IP API for Guests (or if the user profile fetch failed)
     try {
       const res = await fetch('https://ipapi.co/json/');
       if (res.ok) {
@@ -106,7 +103,6 @@ export class ChatClient {
       // Ignore IP API errors
     }
 
-    // 3. Complete failure fallback
     this.locationCode = null;
     this.callbacks.onLocationDetected?.(null);
   }
@@ -189,11 +185,9 @@ export class ChatClient {
             const isFriend = Boolean((match as any).isFriend ?? (match as any).is_friend ?? false);
             this.currentRoomId = roomId;
 
-            // 🛠️ ASYNC HANDLER: Fetch partner's true country from database as a fallback
             (async () => {
               let partnerLocation = match.partnerLocation as string | undefined;
 
-              // If the backend didn't send a location AND the partner is a registered user
               if ((!partnerLocation || partnerLocation === 'Unknown location' || partnerLocation.trim() === '') && partnerUsername) {
                 try {
                   const res = await fetch(`${API_BASE}/api/v1/users/${partnerUsername}`, { credentials: 'include' });
@@ -206,7 +200,6 @@ export class ChatClient {
                 }
               }
 
-              // Race condition check: Ensure the user didn't hit "Next" while we were fetching
               if (this.currentRoomId !== roomId) return;
 
               this.callbacks.onMatchFound(roomId, partnerId, partnerLocation, partnerUsername, isFriend);
@@ -216,6 +209,13 @@ export class ChatClient {
           }
           case 'chat_message': {
             if (!this.ChatMessageProto) break;
+            
+            // 🛠️ THE BOUNCER: Ignore DMs and messages meant for other rooms!
+            const eventRoomId = envelope.roomId as string | undefined;
+            if (eventRoomId && eventRoomId !== this.currentRoomId) {
+              break; 
+            }
+
             const msg = this.ChatMessageProto.decode(payload) as any;
             const messageId = (envelope.id as string) || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
             
@@ -283,27 +283,38 @@ export class ChatClient {
           case 'photo_request': {
             if (!this.PhotoRequestProto) break;
             const req = this.PhotoRequestProto.decode(payload) as any;
+            if ((req.roomId as string) !== this.currentRoomId) break; // 🛠️ Bouncer for photo request
             this.callbacks.onPhotoRequest?.(req.roomId as string, req.from as string);
             break;
           }
           case 'photo_response': {
             if (!this.PhotoResponseProto) break;
             const res = this.PhotoResponseProto.decode(payload) as any;
+            if ((res.roomId as string) !== this.currentRoomId) break; // 🛠️ Bouncer for photo response
             this.callbacks.onPhotoResponse?.(res.roomId as string, res.from as string, Boolean(res.accepted));
             break;
           }
           case 'photo_ready': {
             if (!this.PhotoReadyProto) break;
             const ready = this.PhotoReadyProto.decode(payload) as any;
+            if ((ready.roomId as string) !== this.currentRoomId) break; // 🛠️ Bouncer for photo ready
             this.callbacks.onPhotoReady?.(ready.roomId as string, ready.from as string, ready.url as string, Number(ready.expiresAt));
             break;
           }
           case 'typing_start':
           case 'typing_status': {
+            // 🛠️ THE BOUNCER: Ignore typing from DMs!
+            const eventRoomId = envelope.roomId as string | undefined;
+            if (eventRoomId && eventRoomId !== this.currentRoomId) break;
+
             this.callbacks.onPartnerTyping?.(true);
             break;
           }
           case 'typing_end': {
+            // 🛠️ THE BOUNCER: Ignore typing from DMs!
+            const eventRoomId = envelope.roomId as string | undefined;
+            if (eventRoomId && eventRoomId !== this.currentRoomId) break;
+
             this.callbacks.onPartnerTyping?.(false);
             break;
           }
@@ -346,7 +357,6 @@ export class ChatClient {
   }
 
   async enterMatch() {
-    // 🛠️ The locationCode is now securely fetched from either the DB or the IP API!
     const response = await this.restPost('/api/v1/match/enter', this.locationCode ? { location: this.locationCode } : {});
     const matchedRoomId = typeof (response as any)?.room_id === 'string' ? (response as any).room_id : null;
     const matchedPartnerUsername = typeof (response as any)?.partner_username === 'string' ? (response as any).partner_username : undefined;
