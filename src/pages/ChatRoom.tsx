@@ -14,10 +14,13 @@ import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
 const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
-const isTrustedStorageImage = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  STORAGE_CDN_BASE_URL.length > 0 &&
-  value.startsWith(STORAGE_CDN_BASE_URL);
+// 🛠️ FIX (Bug 7): Safely trust both the raw Supabase URL and the custom CDN domain to prevent image rendering conflicts.
+const isTrustedStorageImage = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  return value.startsWith('https://lyglmrkcyybfqegeprlu.supabase.co/') || 
+         value.startsWith('https://cdn.zquab.com/') ||
+         (STORAGE_CDN_BASE_URL.length > 0 && value.startsWith(STORAGE_CDN_BASE_URL));
+};
 
 const compressImageToWebP = (file: File): Promise<File> => {
   return new Promise((resolve, reject) => {
@@ -138,15 +141,11 @@ export default function ChatRoom({
 
   const handleImageClick = useCallback((url: string) => setViewingImage(url), []);
 
-  // 🛠️ THE FIX: Native mobile back gesture interceptor
   useEffect(() => {
-    // Push a dummy state so the swipe gesture has something to pop
     window.history.pushState(null, '', window.location.href);
 
     const handleNativeBack = () => {
-      // Clear the storage so /home doesn't bounce you back here
       sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
-      // Force navigation directly to /home
       navigate('/home', { replace: true });
     };
 
@@ -596,7 +595,9 @@ export default function ChatRoom({
   const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
+    
     if (!file) return;
+    
     setIncomingPhotoRequest(false);
 
     const localPreviewUrl = URL.createObjectURL(file);
