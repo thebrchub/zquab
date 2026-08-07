@@ -19,6 +19,12 @@ export default function DevMenu() {
     setIsOpen(false);
   };
 
+  // 🛠️ NEW: Function to fire a global disconnect event
+  const triggerMockDisconnect = () => {
+    window.dispatchEvent(new CustomEvent('dev_mock_disconnect'));
+    setIsOpen(false);
+  };
+
   return (
     <div className="fixed bottom-4 right-4 z-[9999] flex flex-col items-end gap-2">
       {isOpen && (
@@ -43,10 +49,19 @@ export default function DevMenu() {
           <Link to="/dev/profile" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
             👤 UI: Profile
           </Link>
-          {/* 🛠️ Added the Search UI Link here */}
           <Link to="/search" onClick={() => setIsOpen(false)} className="text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-colors">
             🔍 UI: Search
           </Link>
+
+          {/* 🛠️ NEW: Mock Disconnect Button */}
+          <div className="mt-2 pt-2 border-t border-gray-700">
+            <button 
+              onClick={triggerMockDisconnect} 
+              className="w-full text-left text-sm font-medium text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 p-2 rounded-lg transition-colors"
+            >
+              🔌 Mock Disconnect
+            </button>
+          </div>
 
           {/* Authentication UI Toggle */}
           <div className="mt-2 pt-2 border-t border-gray-700">

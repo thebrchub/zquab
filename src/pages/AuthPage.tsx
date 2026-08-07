@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { Helmet } from 'react-helmet-async';
 
 const GOOGLE_CLIENT_ID = "1024944888869-9356nb9mq73ki2u2tch6ebtaoic7q3bg.apps.googleusercontent.com";
 
@@ -40,6 +41,13 @@ function AuthForm() {
   };
 
   return (
+
+    <>
+
+    <Helmet>
+  <title>Log In / Sign Up | zQuab Anonymous Chat</title>
+  <meta name="description" content="Create a free zQuab account to save your connections, add friends from your anonymous chats, and keep the conversation going safely in DMs." />
+</Helmet>
     <div className="w-full max-w-md z-10 flex flex-col">
       <div className="bg-[var(--card)] border border-[var(--border-color)] rounded-[2rem] p-8 sm:p-10 shadow-2xl w-full text-center relative z-10">
         <div className="mb-8">
@@ -80,6 +88,7 @@ function AuthForm() {
         </p>
       </div>
     </div>
+    </>
   );
 }
 

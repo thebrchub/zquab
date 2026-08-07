@@ -5,6 +5,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+
+
 
 const values = [
   {
@@ -63,6 +66,11 @@ export default function AboutPage() {
   };
 
   return (
+    <>
+<Helmet>
+  <title>About zQuab | The Safest Anonymous Chat Platform</title>
+  <meta name="description" content="Learn how zQuab is redefining anonymous chat. Read our community guidelines, privacy standards, and mission to connect people through genuine, secure conversations." />
+</Helmet>
     <main className="min-h-[100dvh] pt-10 pb-24 relative w-full bg-[var(--background)] z-20 font-sans">
       <div className="w-full max-w-[1400px] mx-auto px-4 md:px-8 lg:px-12">
         
@@ -265,5 +273,6 @@ export default function AboutPage() {
 
       </div>
     </main>
+    </>
   );
 }

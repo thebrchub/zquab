@@ -4,6 +4,7 @@ import { Calendar, Clock, ArrowRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { blogsApi, type Blog } from '../api/blogs';
 import PaginationLoader from '../components/PaginationLoader';
+import { Helmet } from 'react-helmet-async';
 
 export default function BlogPage() {
   const navigate = useNavigate();
@@ -60,6 +61,12 @@ export default function BlogPage() {
   ];
 
   return (
+    <>
+
+    <Helmet>
+  <title>zQuab Blog | Tips, Updates & Guides for Anonymous Chatting</title>
+  <meta name="description" content="Explore the zQuab blog for the latest platform updates, internet safety tips, and guides on making the best out of your anonymous chat experiences." />
+</Helmet>
     <div className="min-h-[calc(100dvh-64px)] bg-[var(--background)] py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto z-10 relative">
         
@@ -166,5 +173,6 @@ export default function BlogPage() {
         
       </div>
     </div>
+    </>
   );
 }

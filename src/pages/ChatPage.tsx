@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
+import { Helmet } from 'react-helmet-async';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
@@ -137,6 +138,23 @@ export default function ChatPage() {
       setShowRulesModal(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isDev) return;
+    const handleMockDisconnect = () => {
+      if (statusRef.current === 'connected') {
+        setStatus('disconnected');
+        setMessages(prev => [...prev, { 
+          id: `sys-dev-${Date.now()}`, 
+          text: 'Stranger disconnected (Mocked)', 
+          isSystem: true, 
+          isOwn: false 
+        }]);
+      }
+    };
+    window.addEventListener('dev_mock_disconnect', handleMockDisconnect);
+    return () => window.removeEventListener('dev_mock_disconnect', handleMockDisconnect);
+  }, [isDev]);
 
   const handleAcceptRules = () => {
     if (!rulesAgreed) return;
@@ -401,7 +419,14 @@ export default function ChatPage() {
   };
 
   return (
-    
+    <>
+
+    <Helmet>
+      <title>Live Anonymous Chat | Talk to Strangers Instantly - zQuab</title>
+      <meta name="description" content="Start chatting with strangers around the world instantly. No sign-ups, no downloads, 100% anonymous and free. Meet new people on zQuab today." />
+      <meta name="keywords" content="anonymous chat, talk to strangers, random chat, free chat room, chat online, meet strangers, zQuab, zquab" />
+    </Helmet>
+        
     <div className="w-full flex flex-col overflow-hidden fixed top-[64px] inset-x-0 bottom-0 z-40 md:relative md:top-auto md:inset-auto md:z-auto md:max-w-7xl md:mx-auto md:flex-row md:gap-6 md:p-6 md:h-[calc(100dvh-82px)]">
       
       <AnimatePresence>
@@ -733,7 +758,8 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] md:rounded-2xl md:border md:border-[var(--border-color)] overflow-hidden relative">
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
           <div className="flex items-center gap-3">
-            <h2 className="font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
+           
+            <h2 className="hidden md:block font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
           </div>
           <div className="md:hidden flex items-center gap-2">
             {status === 'idle' && <><div className="w-2.5 h-2.5 rounded-full bg-zinc-400" /> <span className="text-sm font-semibold text-zinc-400">Waiting</span></>}
@@ -779,6 +805,26 @@ export default function ChatPage() {
           ))}
           
           {isPartnerTyping && <TypingIndicator />}
+          
+          {/* 🛠️ FIX: Clickable Disconnect System Message */}
+          {status === 'disconnected' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center my-6 w-full select-none"
+            >
+              <span className="text-[11px] sm:text-xs font-black text-[var(--text-muted)] uppercase tracking-widest text-center px-4 mb-2">
+                The stranger disconnected
+              </span>
+              <button 
+                onClick={handleNext} 
+                className="text-[#3B82F6] hover:text-blue-400 text-sm font-bold transition-colors py-1.5 px-4 rounded-full bg-blue-500/10 hover:bg-blue-500/20 active:scale-95"
+              >
+                Talk to next stranger ➔
+              </button>
+            </motion.div>
+          )}
+
         </div>
 
         <input ref={photoFileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFileSelected} />
@@ -827,5 +873,6 @@ export default function ChatPage() {
         />
       </div>
     </div>
+    </>
   );
 }
