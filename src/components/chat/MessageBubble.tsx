@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check, CheckCheck } from 'lucide-react';
 import { memo } from 'react';
 
 interface Props {
@@ -22,7 +22,6 @@ const isOnlyEmojis = (str: string) => {
 function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImageClick, isUploading, isSystem }: Props) {
   const displayText = content || message || '';
   
-  // 🛠️ FIXED: Added the logic to completely bypass the normal bubble for system messages!
   if (isSystem) {
     return (
       <div className="flex justify-center my-4 sm:my-6 w-full select-none">
@@ -35,6 +34,38 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
 
   const formattedTime = time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   const emojiOnly = isOnlyEmojis(displayText);
+
+  // 🛠️ NEW: Helper to render fixed-width icons instead of text
+  const renderStatusIcon = () => {
+    if (!isOwn || !status) return null;
+    
+    switch (status) {
+      case 'sent':
+        return <Check className="w-3.5 h-3.5 text-white/70" />;
+      case 'delivered':
+        return <CheckCheck className="w-3.5 h-3.5 text-white/70" />;
+      case 'read':
+        return <CheckCheck className="w-3.5 h-3.5 text-[#4ade80]" />; // Bright green for contrast on blue
+      default:
+        return null;
+    }
+  };
+
+  // 🛠️ NEW: Helper for emoji-only status icons (different colors for the transparent background)
+  const renderEmojiStatusIcon = () => {
+    if (!isOwn || !status) return null;
+    
+    switch (status) {
+      case 'sent':
+        return <Check className="w-3.5 h-3.5 text-[var(--text-muted)]" />;
+      case 'delivered':
+        return <CheckCheck className="w-3.5 h-3.5 text-[var(--text-muted)]" />;
+      case 'read':
+        return <CheckCheck className="w-3.5 h-3.5 text-[#3B82F6]" />; // Blue ticks for read emojis
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className={`flex flex-col w-full mb-4 ${isOwn ? 'items-end' : 'items-start'}`}>
@@ -69,7 +100,6 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
       {/* 2. Text or Emoji Render */}
       {displayText && (
         <div 
-      
           className={`max-w-[75%] md:max-w-[65%] flex flex-col relative transition-all duration-200 ease-out
             ${emojiOnly 
               ? 'bg-transparent text-4xl leading-tight'
@@ -80,19 +110,17 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
                  }`
             }`}
         >
-          {/* 🛠️ FIX: Removed 'break-all' so whole words wrap naturally to the next line */}
           <p className="break-words whitespace-pre-wrap">{displayText}</p>
           
           {formattedTime && !emojiOnly && (
-            <div className={`flex items-center gap-1.5 mt-1 text-[10px] uppercase font-bold self-end
+            <div className={`flex items-center gap-1 mt-1 text-[10px] uppercase font-bold self-end
               ${isOwn ? 'text-blue-100' : 'text-[var(--text-muted)]'}
             `}>
               <span>{formattedTime}</span>
-              {isOwn && status && (
-                <span className="tracking-wider opacity-80">
-                  • {status}
-                </span>
-              )}
+              {/* 🛠️ FIX: Replaced text with the icon helper */}
+              <div className="flex items-center ml-0.5">
+                {renderStatusIcon()}
+              </div>
             </div>
           )}
         </div>
@@ -103,7 +131,10 @@ function MessageBubble({ message, content, isOwn, status, time, imageUrl, onImag
           ${isOwn ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)]'}
         `}>
           <span>{formattedTime}</span>
-          {isOwn && status && <span>• {status}</span>}
+          {/* 🛠️ FIX: Replaced text with the emoji icon helper */}
+          <div className="flex items-center ml-0.5">
+            {renderEmojiStatusIcon()}
+          </div>
         </div>
       )}
 
