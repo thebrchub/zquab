@@ -97,24 +97,19 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
     })();
   }, [isFullUser, refreshRooms, refreshFriendRequests]);
 
-  // 🛠️ NEW: Handles unfriend events and friend requests
- // 🛠️ NEW: Handles unfriend events and friend requests
   useEffect(() => {
     if (!lastMessage) return;
     const type = lastMessage.type;
     
-    // Refresh requests for any friend-related event
     if (['friend_request', 'friend_accepted', 'friend_request_withdrawn', 'unfriend'].includes(type)) {
       refreshFriendRequests();
     }
 
-    // 🛠️ If unfriended, instantly kill the DM room UI
     if (type === 'unfriend') {
       const deletedRoomId = lastMessage.payload?.roomId || lastMessage.payload?.room_id;
       if (deletedRoomId) {
         setRooms(prev => prev.filter(r => r.room_id !== deletedRoomId));
         
-        // FIX: Compare against activeRoomId, not the setter function!
         if (activeRoomId === deletedRoomId) {
           setActiveRoomIdState(null);
           sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
@@ -124,7 +119,7 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [lastMessage, refreshFriendRequests, activeRoomId]); // FIX: Updated dependency array
+  }, [lastMessage, refreshFriendRequests, activeRoomId]);
 
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'chat_message') return;
@@ -147,7 +142,8 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
         ...prevRooms[idx],
         last_message_preview: lastMessage.payload?.text ?? prevRooms[idx].last_message_preview,
         last_message_at: new Date(tsMs).toISOString(),
-        unread_count: (!isOwn && !isOpenRoom) ? prevRooms[idx].unread_count + 1 : prevRooms[idx].unread_count,
+        // 🛠️ FIX 1: If you are the sender (isOwn), force unread_count to 0 to wipe out any ghost unread counts!
+        unread_count: isOwn ? 0 : (!isOpenRoom ? prevRooms[idx].unread_count + 1 : prevRooms[idx].unread_count),
       };
 
       const rest = prevRooms.filter((_, i) => i !== idx);
@@ -213,6 +209,8 @@ export function RoomsProvider({ children }: { children: ReactNode }) {
         ...prevRooms[idx],
         last_message_preview: preview,
         last_message_at: new Date().toISOString(),
+        // 🛠️ FIX 2: Explicitly force unread_count to 0 when you optimistically bump the room
+        unread_count: 0,
       };
       const rest = prevRooms.filter((_, i) => i !== idx);
       return [updatedRoom, ...rest];
