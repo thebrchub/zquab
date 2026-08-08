@@ -146,7 +146,11 @@ export default function ChatRoom({
   const handleImageClick = useCallback((url: string) => setViewingImage(url), []);
 
   useEffect(() => {
-    window.history.pushState(null, '', window.location.href);
+    // 🛠️ FIX 1: The Chrome "Anti-Trap" Bypass
+    // We append a tiny hash so Chrome's history engine is forced to register the fake state, even after a hard refresh.
+    if (!window.location.hash.includes('active')) {
+      window.history.pushState({ isChat: true }, '', window.location.pathname + '#active');
+    }
 
     const handleNativeBack = () => {
       sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
@@ -758,8 +762,9 @@ export default function ChatRoom({
         <div className="flex items-center gap-2 min-w-0">
           <button 
             onClick={() => {
-              sessionStorage.removeItem(LAST_ROOM_STORAGE_KEY);
-              navigate('/home');
+              // 🛠️ FIX 2: Instead of running separate logic, we trigger the native back action.
+              // This smoothly pops the #active hash and runs the bulletproof cleanup code above!
+              window.history.back();
             }} 
             className="p-2 -ml-1 sm:-ml-2 text-[var(--text-muted)] active:bg-[var(--background)] rounded-full transition-colors flex-shrink-0 md:hidden"
           >
