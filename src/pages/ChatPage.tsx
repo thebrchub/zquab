@@ -3,7 +3,6 @@ import MessageBubble from '../components/chat/MessageBubble';
 import ChatInput from '../components/chat/ChatInput';
 import ConnectionCard from '../components/chat/ConnectionCard';
 import TypingIndicator from '../components/chat/TypingIndicator';
-// 🛠️ NEW: Imported AlertTriangle for the warning modal
 import { Loader2, UserPlus, MoreVertical, LogOut, Image, Check, X, ShieldAlert, AlertTriangle, ShieldCheck, Users, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +10,6 @@ import { ChatClient, type ChatMessage } from '../utils/chatClient';
 import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { Helmet } from 'react-helmet-async';
-
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
@@ -70,6 +68,10 @@ export default function ChatPage() {
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  
+  // 🛠️ FIX 1: New state for mobile 'Next' confirmation modal
+  const [showMobileNextConfirm, setShowMobileNextConfirm] = useState(false); 
+  
   const [pendingRoute, setPendingRoute] = useState<string | null>(null); 
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [rulesAgreed, setRulesAgreed] = useState(false);
@@ -84,12 +86,14 @@ export default function ChatPage() {
   const [friendRequestSent, setFriendRequestSent] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-  
-  // 🛠️ NEW: State to control the auth interruption warning
   const [showAuthWarning, setShowAuthWarning] = useState(false);
 
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingStateRef = useRef(false);
+  
+  // 🛠️ FIX 2: A ref to lock the UI during the "skip" network race condition
+  const isSkippingRef = useRef(false); 
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const photoRequestTimeoutRef = useRef<number | null>(null);
@@ -174,7 +178,11 @@ export default function ChatPage() {
     if (isDev) return null; 
     
     return new ChatClient({
-      onStatusChange: setStatus,
+      onStatusChange: (newStatus) => {
+        // Prevent accidental status changes if we are forcing a skip
+        if (isSkippingRef.current && newStatus === 'disconnected') return;
+        setStatus(newStatus);
+      },
       onIncomingMessage: (message) => setMessages((prev) => [...prev, message]),
       onSystemMessage: (text) => {
         console.log('[Chat System]:', text);
@@ -205,6 +213,8 @@ export default function ChatPage() {
       onLocationDetected: (country) => setUserCountry(country),
       onPartnerTyping: (isTyping) => setIsPartnerTyping(isTyping),
       onDisconnected: () => {
+        // 🛠️ FIX 2: Ignore the disconnect message if we intentionally skipped!
+        if (isSkippingRef.current) return;
         setStatus('disconnected');
         setIsPartnerTyping(false); 
       },
@@ -246,7 +256,6 @@ export default function ChatPage() {
     };
   }, [chatClient]); 
 
-  // 🛠️ NEW: Intercept global link clicks to block accidental login navigations
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
       if (status !== 'connected') return;
@@ -259,11 +268,11 @@ export default function ChatPage() {
         if (href) {
           if (href.startsWith('/auth') && status === 'connected') {
             setShowAuthWarning(true);
-            setShowMobileMenu(false); // 👈 Forces sidebar closed!
+            setShowMobileMenu(false); 
           } else {
             setPendingRoute(href);
             setShowLeaveConfirm(true); 
-            setShowMobileMenu(false); // 👈 Forces sidebar closed!
+            setShowMobileMenu(false); 
           }
         }
       }
@@ -285,7 +294,6 @@ export default function ChatPage() {
     }
     
     setMessages([]); 
-    
     setStatus('searching');
     chatClient?.start().catch((error) => console.error(error));
   };
@@ -327,7 +335,16 @@ export default function ChatPage() {
       setShowMobileMenu(false); 
       return;
     }
-    chatClient?.nextStranger().catch(() => {});
+    
+    // 🛠️ FIX 2: Activate the lock so the UI instantly goes to searching and ignores the delayed disconnect event
+    isSkippingRef.current = true;
+    setStatus('searching');
+    
+    chatClient?.nextStranger().finally(() => {
+      // Unlock it after 1 second to ensure the network race is finished
+      setTimeout(() => { isSkippingRef.current = false; }, 1000);
+    });
+    
     setMessages([]);
     setShowMobileMenu(false);
     setIncomingPhotoRequest(false);
@@ -336,6 +353,15 @@ export default function ChatPage() {
     setIsMatchWithFriend(false);
     setPartnerAvatar(undefined); 
     clearPhotoRequestTimeout();
+  };
+
+  // 🛠️ FIX 1: Custom handler just for the mobile Next button
+  const handleMobileNextClick = () => {
+    if (status === 'connected') {
+      setShowMobileNextConfirm(true);
+    } else {
+      handleNext();
+    }
   };
 
   const handleRequestPhoto = () => {
@@ -426,17 +452,14 @@ export default function ChatPage() {
 
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
-  // 🛠️ NEW: Check for the onboarding flag when the page loads
   useEffect(() => {
     const shouldShowWelcome = sessionStorage.getItem('zquab_show_welcome');
     if (shouldShowWelcome) {
       setShowWelcomeModal(true);
-      // Immediately delete it so it never shows on refresh again!
       sessionStorage.removeItem('zquab_show_welcome');
     }
   }, []);
 
-  // 🛠️ DEV TOOL: Listens for the Mock Welcome button from DevMenu
   useEffect(() => {
     if (!isDev) return;
     const handleMockWelcome = () => {
@@ -495,7 +518,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 🛠️ NEW: Auth Interruption Warning Modal */}
+      {/* Auth Interruption Warning Modal */}
       <AnimatePresence>
         {showAuthWarning && (
           <motion.div
@@ -583,9 +606,9 @@ export default function ChatPage() {
                   friendRequestStatus={friendRequestSent ? 'sent' : 'none'}
                   isAlreadyFriend={isMatchWithFriend}
                   onLeaveConfirm={() => {
-  setShowLeaveConfirm(true);
-  setShowMobileMenu(false); // 👈 Forces sidebar closed!
-}}
+                    setShowLeaveConfirm(true);
+                    setShowMobileMenu(false);
+                  }}
                 />
               </div>
             </motion.div>
@@ -594,6 +617,31 @@ export default function ChatPage() {
       </AnimatePresence>,
       document.body
       )}
+
+      {/* 🛠️ FIX 1: Mobile "Next" Button Confirmation Overlay */}
+      <AnimatePresence>
+        {showMobileNextConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[var(--card)] p-6 md:p-8 rounded-[2rem] w-full max-w-sm border border-[var(--border-color)] shadow-2xl text-center">
+              <div className="w-16 h-16 rounded-full bg-orange-500/10 text-orange-500 flex items-center justify-center mx-auto mb-6 ring-1 ring-inset ring-orange-500/20">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Skip to Next?</h3>
+              <p className="text-[var(--text-muted)] mb-8 leading-relaxed">
+                This conversation will be lost forever. Are you sure you want to skip?
+              </p>
+              <div className="flex flex-col gap-3">
+                <button onClick={() => { setShowMobileNextConfirm(false); handleNext(); }} className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition-colors">
+                  Yes, Skip
+                </button>
+                <button onClick={() => setShowMobileNextConfirm(false)} className="w-full py-4 bg-[var(--background)] hover:bg-[var(--border-color)] text-[var(--text-main)] border border-[var(--border-color)] rounded-xl font-bold transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showLeaveConfirm && (
@@ -663,7 +711,6 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* 🛠️ NEW: Privacy Assurance Note */}
               <div className="flex items-center justify-center gap-2 mb-6">
                 <ShieldCheck className="w-4 h-4 text-[var(--text-muted)]" />
                 <span className="text-xs font-semibold text-[var(--text-muted)]">
@@ -832,7 +879,6 @@ export default function ChatPage() {
               <h3 className="text-2xl font-bold text-[var(--text-main)] mb-3">Create an Account</h3>
               <p className="text-[var(--text-muted)] mb-8 text-sm">You are browsing as a guest. Create an account to add friends and save connections.</p>
               <div className="flex flex-col gap-3">
-                {/* 🛠️ NEW: Intercept explicit log in button press to spawn warning */}
                 <button onClick={() => {
                   setShowLoginPrompt(false);
                   if (status === 'connected') {
@@ -851,7 +897,6 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col bg-[var(--background)] md:bg-[var(--card)] md:rounded-2xl md:border md:border-[var(--border-color)] overflow-hidden relative">
         <div className="p-3 md:p-4 border-b border-[var(--border-color)] bg-[var(--card)]/80 backdrop-blur-md flex-shrink-0 flex justify-between items-center z-20">
           
-          {/* 🛠️ FIX: Grouped the Title and Status indicator together into the left flex container */}
           <div className="flex items-center gap-3">
             <h2 className="hidden md:block font-bold text-lg text-[var(--text-main)]">Anonymous Chat</h2>
             
@@ -862,10 +907,10 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Right side controls remain exactly the same */}
           <div className="flex md:hidden items-center gap-1.5">
             {status !== 'idle' && (
-              <button onClick={handleNext} className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
+              // 🛠️ FIX 1: Hooked up the mobile-specific confirmation check!
+              <button onClick={handleMobileNextClick} className="bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5">
                 <UserPlus className="w-4 h-4" /> Next
               </button>
             )}
@@ -903,7 +948,6 @@ export default function ChatPage() {
           
           {isPartnerTyping && <TypingIndicator />}
           
-          {/* 🛠️ FIX: Clickable Disconnect System Message */}
           {status === 'disconnected' && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
