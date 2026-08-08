@@ -41,7 +41,8 @@ export default function HomePage() {
   const [selectedChat, setSelectedChat] = useState<{ roomId: string, name: string, username: string, avatar?: string, isOnline?: boolean } | null>(null);
 
   useEffect(() => {
-    friendsApi.getRequests('received')
+    // 🛠️ FIX: Explicitly pass a higher limit (e.g., 50 or 100) to override the default limit of 10
+    friendsApi.getRequests('received', 50)
       .then(setRequests)
       .catch(err => console.error('Failed to load friend requests:', err));
   }, []);
