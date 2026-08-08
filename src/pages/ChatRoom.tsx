@@ -124,7 +124,6 @@ export default function ChatRoom({
   const loadingMoreRef = useRef(false);
   const initialScrollComplete = useRef(false);
   
-  // 🛠️ FIX 2: Bouncer ref to block stale global context messages from duplicating on mount
   const lastProcessedMessageRef = useRef<any>(lastMessage);
 
   const messagesRef = useRef(messages);
@@ -257,11 +256,11 @@ export default function ChatRoom({
           };
         });
 
-        // 🛠️ FIX 1: Completely ripped out the buggy sessionStorage pendingOpts cache
         setMessages(previousMessages => {
           const newHistory = formattedHistory.reverse();
-          const knownIds = new Set(newHistory.map(message => message.id));
-          return [...newHistory, ...previousMessages.filter(message => !knownIds.has(message.id))];
+          // 🛠️ FIX: Added explicit (message: any) typing
+          const knownIds = new Set(newHistory.map((message: any) => message.id));
+          return [...newHistory, ...previousMessages.filter((message: any) => !knownIds.has(message.id))];
         });
         
         setHasMore(history.length >= 50);
@@ -298,7 +297,6 @@ export default function ChatRoom({
   useEffect(() => {
     if (isDevMode || !lastMessage) return;
     
-    // 🛠️ FIX 2: Block stale messages sitting in Context from injecting upon room remount
     if (lastMessage === lastProcessedMessageRef.current) return;
     lastProcessedMessageRef.current = lastMessage;
 
@@ -306,7 +304,8 @@ export default function ChatRoom({
       const confirmedId = lastMessage.id || lastMessage.payload?.messageId || lastMessage.payload?.message_id;
       if (confirmedId) {
         sentMessageIdsRef.current.delete(String(confirmedId));
-        setMessages(prev => prev.map(message => message.id === String(confirmedId) ? { ...message, status: 'delivered' } : message));
+        // 🛠️ FIX: Added explicit (message: any) typing
+        setMessages(prev => prev.map((message: any) => message.id === String(confirmedId) ? { ...message, status: 'delivered' } : message));
       }
       return;
     }
@@ -355,10 +354,12 @@ export default function ChatRoom({
           if (Number.isFinite(expiresAt)) {
             const delay = expiresAt - Date.now();
             if (delay <= 0) {
-              setMessages(prev => prev.filter(message => message.id !== photoId));
+              // 🛠️ FIX: Added explicit (message: any) typing
+              setMessages(prev => prev.filter((message: any) => message.id !== photoId));
             } else {
               window.setTimeout(() => {
-                setMessages(prev => prev.filter(message => message.id !== photoId));
+                // 🛠️ FIX: Added explicit (message: any) typing
+                setMessages(prev => prev.filter((message: any) => message.id !== photoId));
               }, delay);
             }
           }
@@ -368,12 +369,12 @@ export default function ChatRoom({
 
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered' || lastMessage.type === 'message_delivered') {
         
-        // 🛠️ FIX 3: Bulletproof ID Extraction to perfectly dedupe incoming broadcasts against DB History
         const confirmedId = lastMessage.id || lastMessage.payload?.id || lastMessage.payload?.messageId || lastMessage.payload?.message_id;
 
         if (confirmedId && sentMessageIdsRef.current.has(confirmedId)) {
           sentMessageIdsRef.current.delete(confirmedId);
-          setMessages(prev => prev.map(message => message.id === confirmedId ? { ...message, status: 'delivered' } : message));
+          // 🛠️ FIX: Added explicit (message: any) typing
+          setMessages(prev => prev.map((message: any) => message.id === confirmedId ? { ...message, status: 'delivered' } : message));
           return;
         }
 
@@ -402,14 +403,15 @@ export default function ChatRoom({
         };
         
         setMessages(prev => {
-          // Strict deduplication ensures no visual repeating
-          if (prev.some(message => message.id === newMsg.id)) return prev;
+          // 🛠️ FIX: Added explicit (message: any) typing
+          if (prev.some((message: any) => message.id === newMsg.id)) return prev;
 
           const pendingPhoto = isOwn && newMsg.imageUrl
-            ? prev.find(message => message.isUploading)
+            ? prev.find((message: any) => message.isUploading)
             : undefined;
           if (pendingPhoto) {
-            return prev.map(message => message.id === pendingPhoto.id ? newMsg : message);
+            // 🛠️ FIX: Added explicit (message: any) typing
+            return prev.map((message: any) => message.id === pendingPhoto.id ? newMsg : message);
           }
           return [...prev, newMsg];
         });
@@ -447,7 +449,8 @@ export default function ChatRoom({
         const readerId = lastMessage.sender_id || lastMessage.from || lastMessage.payload?.userId || lastMessage.payload?.user_id;
         if (readerId && myId && readerId !== myId) {
           const readMessageId = lastMessage.payload?.messageId || lastMessage.payload?.message_id;
-          setMessages(prev => prev.map(m => (m.isOwn && m.status !== 'read' && (!readMessageId || m.id === readMessageId)) ? { ...m, status: 'read' } : m));
+          // 🛠️ FIX: Added explicit (m: any) typing
+          setMessages(prev => prev.map((m: any) => (m.isOwn && m.status !== 'read' && (!readMessageId || m.id === readMessageId)) ? { ...m, status: 'read' } : m));
         }
       }
     }
@@ -489,7 +492,8 @@ export default function ChatRoom({
             });
 
             setMessages(prev => {
-              const existingIds = new Set(prev.map(message => message.id));
+              // 🛠️ FIX: Added explicit (message: any) typing
+              const existingIds = new Set(prev.map((message: any) => message.id));
               const uniqueOlder = formattedOlder.reverse().filter((message: any) => !existingIds.has(message.id));
               return [...uniqueOlder, ...prev];
             });
@@ -555,8 +559,6 @@ export default function ChatRoom({
     };
     
     setMessages(prev => [...prev, optimisticMsg]);
-    
-    // 🛠️ FIX 1: Rip out sessionStorage caching logic entirely. The DB fetch is much safer.
     
     if (roomId) bumpOwnMessage(roomId, text);
     
@@ -653,7 +655,8 @@ export default function ChatRoom({
       if (uploaded?.message_id && isTrustedStorageImage(uploaded.url)) {
         const messageId = String(uploaded.message_id);
         sentMessageIdsRef.current.add(messageId);
-        setMessages((prev) => prev.map((msg) => msg.id === tempId ? {
+        // 🛠️ FIX: Added explicit (msg: any) typing
+        setMessages((prev) => prev.map((msg: any) => msg.id === tempId ? {
           ...msg,
           id: messageId,
           imageUrl: uploaded.url,
@@ -662,12 +665,14 @@ export default function ChatRoom({
           status: 'delivered',
         } : msg));
       } else {
-        setMessages((prev) => prev.map((msg) => msg.id === tempId ? { ...msg, isUploading: false } : msg));
+        // 🛠️ FIX: Added explicit (msg: any) typing
+        setMessages((prev) => prev.map((msg: any) => msg.id === tempId ? { ...msg, isUploading: false } : msg));
       }
       if (roomId) bumpOwnMessage(roomId, 'Photo');
     } catch (error) {
       URL.revokeObjectURL(localPreviewUrl);
-      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
+      // 🛠️ FIX: Added explicit (msg: any) typing
+      setMessages((prev) => prev.filter((msg: any) => msg.id !== tempId));
       setMessages((prev) => [...prev, { id: `sys-pr-error-${Date.now()}`, content: error instanceof Error ? error.message : 'Failed to send photo.', isSystem: true, isOwn: false }]);
     }
 
@@ -804,7 +809,8 @@ export default function ChatRoom({
           </div>
         ) : (
           <div className="space-y-2 sm:space-y-3 min-w-0 w-full flex flex-col">
-            {messages.map((msg, index) => (
+            {/* 🛠️ FIX: Added explicit (msg: any) typing */}
+            {messages.map((msg: any, index) => (
               <MessageBubble 
                 key={msg.id || index}
                 content={msg.content}
