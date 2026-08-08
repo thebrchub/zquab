@@ -14,7 +14,6 @@ import ChatDetailsSidebar from '../components/chat/ChatDetailsSidebar';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://api.zquab.com';
 const STORAGE_CDN_BASE_URL = import.meta.env.VITE_STORAGE_CDN_BASE_URL ?? 'https://lyglmrkcyybfqegeprlu.supabase.co/storage/v1/object/public/zquab-bucket/';
 
-// 🛠️ FIX (Bug 7): Safely trust both the raw Supabase URL and the custom CDN domain to prevent image rendering conflicts.
 const isTrustedStorageImage = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
   return value.startsWith('https://lyglmrkcyybfqegeprlu.supabase.co/') || 
@@ -124,6 +123,9 @@ export default function ChatRoom({
   const roomGenerationRef = useRef(0);
   const loadingMoreRef = useRef(false);
   const initialScrollComplete = useRef(false);
+  
+  // 🛠️ FIX 2: Bouncer ref to block stale global context messages from duplicating on mount
+  const lastProcessedMessageRef = useRef<any>(lastMessage);
 
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -133,8 +135,6 @@ export default function ChatRoom({
     roomGenerationRef.current += 1;
     sentMessageIdsRef.current.clear();
     loadingMoreRef.current = false;
-    
-    // 🛠️ FIX 2: Reset the lock when changing rooms!
     initialScrollComplete.current = false; 
     
     setMessages([]);
@@ -257,39 +257,23 @@ export default function ChatRoom({
           };
         });
 
-        const storedOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
-
-        const pendingOpts = storedOpts.filter((opt: any) => {
-          const age = Date.now() - new Date(opt.created_at).getTime();
-          if (age >= 10000) return false;
-          const optTime = new Date(opt.created_at).getTime();
-          const alreadyLanded = formattedHistory.some((m: any) =>
-            m.isOwn &&
-            m.content === opt.content &&
-            Math.abs(new Date(m.created_at).getTime() - optTime) < 15000
-          );
-          return !alreadyLanded;
+        // 🛠️ FIX 1: Completely ripped out the buggy sessionStorage pendingOpts cache
+        setMessages(previousMessages => {
+          const newHistory = formattedHistory.reverse();
+          const knownIds = new Set(newHistory.map(message => message.id));
+          return [...newHistory, ...previousMessages.filter(message => !knownIds.has(message.id))];
         });
         
-        sessionStorage.setItem(`opts_${roomId}`, JSON.stringify(pendingOpts));
-
-        setMessages(previousMessages => {
-          const historyAndPending = [...formattedHistory.reverse(), ...pendingOpts];
-          const knownIds = new Set(historyAndPending.map(message => message.id));
-          return [...historyAndPending, ...previousMessages.filter(message => !knownIds.has(message.id))];
-        });
         setHasMore(history.length >= 50);
         
-        // 🛠️ FIX 3a: Scroll to bottom, THEN unlock the observer
-        setTimeout(() => {
+        window.requestAnimationFrame(() => {
           if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
           }
-          // Give the browser 50ms to process the scroll before unlocking pagination
           setTimeout(() => {
             initialScrollComplete.current = true;
           }, 50);
-        }, 100);
+        });
       } catch (err: any) {
         if (!cancelled && generation === roomGenerationRef.current && activeRoomIdRef.current === roomId) {
           setError(err.message || 'Failed to load chat');
@@ -313,6 +297,10 @@ export default function ChatRoom({
 
   useEffect(() => {
     if (isDevMode || !lastMessage) return;
+    
+    // 🛠️ FIX 2: Block stale messages sitting in Context from injecting upon room remount
+    if (lastMessage === lastProcessedMessageRef.current) return;
+    lastProcessedMessageRef.current = lastMessage;
 
     if (lastMessage.type === 'send_confirm' || lastMessage.type === 'message_sent_confirm') {
       const confirmedId = lastMessage.id || lastMessage.payload?.messageId || lastMessage.payload?.message_id;
@@ -324,9 +312,6 @@ export default function ChatRoom({
     }
 
     if (lastMessage.type === 'error') {
-      // Server rejected the last action (e.g. SERVER_BUSY, NOT_A_MEMBER). No
-      // message id is included, so we can't target the specific bubble —
-      // surface it as a system message instead of failing silently.
       setMessages(prev => [...prev, {
         id: `sys-err-${Date.now()}`,
         content: lastMessage.payload?.message || 'Something went wrong. Please try again.',
@@ -382,9 +367,13 @@ export default function ChatRoom({
       }
 
       if (lastMessage.type === 'chat_message' || lastMessage.type === 'delivered' || lastMessage.type === 'message_delivered') {
-        if (lastMessage.id && sentMessageIdsRef.current.has(lastMessage.id)) {
-          sentMessageIdsRef.current.delete(lastMessage.id);
-          setMessages(prev => prev.map(message => message.id === lastMessage.id ? { ...message, status: 'delivered' } : message));
+        
+        // 🛠️ FIX 3: Bulletproof ID Extraction to perfectly dedupe incoming broadcasts against DB History
+        const confirmedId = lastMessage.id || lastMessage.payload?.id || lastMessage.payload?.messageId || lastMessage.payload?.message_id;
+
+        if (confirmedId && sentMessageIdsRef.current.has(confirmedId)) {
+          sentMessageIdsRef.current.delete(confirmedId);
+          setMessages(prev => prev.map(message => message.id === confirmedId ? { ...message, status: 'delivered' } : message));
           return;
         }
 
@@ -404,7 +393,7 @@ export default function ChatRoom({
             : undefined;
             
         const newMsg = {
-          id: lastMessage.id,
+          id: confirmedId || `ws-${Date.now()}`,
           content: imageUrl ? '' : messageText,
           created_at: new Date(tsMs).toISOString(),
           isOwn,
@@ -413,6 +402,7 @@ export default function ChatRoom({
         };
         
         setMessages(prev => {
+          // Strict deduplication ensures no visual repeating
           if (prev.some(message => message.id === newMsg.id)) return prev;
 
           const pendingPhoto = isOwn && newMsg.imageUrl
@@ -429,9 +419,15 @@ export default function ChatRoom({
           sendMessage('read', undefined, roomId);
         }
 
-        setTimeout(() => {
-          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }, 100);
+        window.requestAnimationFrame(() => {
+          if (scrollRef.current) {
+            scrollRef.current.style.scrollBehavior = 'smooth';
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            setTimeout(() => {
+              if (scrollRef.current) scrollRef.current.style.scrollBehavior = 'auto';
+            }, 300);
+          }
+        });
       }
       else if (lastMessage.type === 'typing_start' || lastMessage.type === 'typing_status') {
         setIsPartnerTyping(true);
@@ -464,7 +460,6 @@ export default function ChatRoom({
       async (entries) => {
         const currentMessages = messagesRef.current;
         
-        // 🛠️ FIX 3b: Add `initialScrollComplete.current` to the end of this if-statement!
         if (entries[0].isIntersecting && hasMore && !loadingMoreRef.current && !loading && currentMessages.length > 0 && roomId && initialScrollComplete.current) {
           
           loadingMoreRef.current = true;
@@ -561,14 +556,19 @@ export default function ChatRoom({
     
     setMessages(prev => [...prev, optimisticMsg]);
     
-    const existingOpts = JSON.parse(sessionStorage.getItem(`opts_${roomId}`) || '[]');
-    sessionStorage.setItem(`opts_${roomId}`, JSON.stringify([...existingOpts, optimisticMsg]));
-
+    // 🛠️ FIX 1: Rip out sessionStorage caching logic entirely. The DB fetch is much safer.
+    
     if (roomId) bumpOwnMessage(roomId, text);
     
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, 100);
+    window.requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.style.scrollBehavior = 'smooth';
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.style.scrollBehavior = 'auto';
+        }, 300);
+      }
+    });
   };
 
   const handleRequestPhoto = async () => {
@@ -671,9 +671,15 @@ export default function ChatRoom({
       setMessages((prev) => [...prev, { id: `sys-pr-error-${Date.now()}`, content: error instanceof Error ? error.message : 'Failed to send photo.', isSystem: true, isOwn: false }]);
     }
 
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, 100);
+    window.requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.style.scrollBehavior = 'smooth';
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.style.scrollBehavior = 'auto';
+        }, 300);
+      }
+    });
   };
 
   if (loading) {
