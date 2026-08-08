@@ -181,9 +181,11 @@ export default function ChatPage() {
         setMessages((prev) => [...prev, { id: `sys-${Date.now()}-${Math.random()}`, text, isSystem: true, isOwn: false }]);
       },
       onMatchFound: (_roomId, _partnerId, partnerLocation, partnerUsername, isFriend, partnerAvatar) => {
+        setMessages([]); 
+        
         setPartnerUsername(partnerUsername);
         setIsMatchWithFriend(Boolean(isFriend));
-        setPartnerAvatar(partnerAvatar); 
+        setPartnerAvatar(partnerAvatar);
 
         if (!partnerLocation) {
           setPartnerCountry({ name: 'Unknown location', code: '' });
@@ -281,6 +283,9 @@ export default function ChatPage() {
       handleMockConnect('guest');
       return;
     }
+    
+    setMessages([]); 
+    
     setStatus('searching');
     chatClient?.start().catch((error) => console.error(error));
   };

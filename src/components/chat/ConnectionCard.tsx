@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ReactCountryFlag from 'react-country-flag';
-import { UserPlus, LogOut, Check, Loader2, Globe2, Plus, User, HelpCircle } from 'lucide-react';
+import { UserPlus, LogOut, Check, Loader2, Globe2, Plus, User, HelpCircle, AlertTriangle } from 'lucide-react';
 
 type Status = 'idle' | 'searching' | 'connected' | 'disconnected';
 
@@ -11,7 +11,7 @@ interface Props {
   partnerCountry?: { name: string; code: string } | null;
   partnerUsername?: string; 
   partnerGender?: string; 
-  partnerAvatar?: string; // 🛠️ NEW PROP
+  partnerAvatar?: string; 
   onAddFriend?: () => void;
   friendRequestStatus?: 'none' | 'loading' | 'sent';
   isAlreadyFriend?: boolean;
@@ -31,13 +31,24 @@ export default function ConnectionCard({
   isAlreadyFriend = false,
   onLeaveConfirm
 }: Props) {
-  const [showConfirm, setShowConfirm] = useState(false);
+  // 🛠️ FIX: Split the confirms into two separate states
+  const [showAddConfirm, setShowAddConfirm] = useState(false);
+  const [showNextConfirm, setShowNextConfirm] = useState(false);
+
+  // 🛠️ FIX: Only ask for confirmation if they are actively in a chat
+  const handleNextClick = () => {
+    if (status === 'connected') {
+      setShowNextConfirm(true);
+    } else {
+      onNext();
+    }
+  };
 
   return (
     <div className="glass rounded-2xl p-6 flex flex-col h-full border border-[var(--border-color)] shadow-sm bg-[var(--card)] relative overflow-hidden">
       
-      {/* INLINE CONFIRMATION OVERLAY */}
-      {showConfirm && (
+      {/* 1. INLINE CONFIRMATION OVERLAY FOR ADD FRIEND */}
+      {showAddConfirm && (
         <div className="absolute inset-0 z-20 bg-[var(--card)]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-200">
           <div className="w-12 h-12 bg-blue-500/10 text-[#3B82F6] rounded-full flex items-center justify-center mb-3">
             <UserPlus className="w-6 h-6" />
@@ -49,14 +60,43 @@ export default function ConnectionCard({
             <button
               onClick={() => {
                 onAddFriend?.();
-                setShowConfirm(false);
+                setShowAddConfirm(false);
               }}
               className="w-full py-3 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-bold transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]"
             >
               Send Request
             </button>
             <button
-              onClick={() => setShowConfirm(false)}
+              onClick={() => setShowAddConfirm(false)}
+              className="w-full py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-xl font-bold transition-all active:scale-[0.98]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. INLINE CONFIRMATION OVERLAY FOR NEXT STRANGER (NEW) */}
+      {showNextConfirm && (
+        <div className="absolute inset-0 z-20 bg-[var(--card)]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-12 h-12 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mb-3">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h4 className="text-[var(--text-main)] font-bold text-lg mb-1">Skip to Next?</h4>
+          <p className="text-sm text-[var(--text-muted)] mb-6">This conversation will be lost forever.</p>
+          
+          <div className="flex flex-col gap-2 w-full">
+            <button
+              onClick={() => {
+                onNext();
+                setShowNextConfirm(false);
+              }}
+              className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition-all shadow-md shadow-orange-500/20 active:scale-[0.98]"
+            >
+              Yes, Skip
+            </button>
+            <button
+              onClick={() => setShowNextConfirm(false)}
               className="w-full py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-main)] hover:bg-[var(--border-color)] rounded-xl font-bold transition-all active:scale-[0.98]"
             >
               Cancel
@@ -112,7 +152,7 @@ export default function ConnectionCard({
               {/* Dynamic Overlapping Badge */}
               {!isAlreadyFriend && friendRequestStatus === 'none' ? (
                 <button
-                  onClick={() => setShowConfirm(true)}
+                  onClick={() => setShowAddConfirm(true)}
                   className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#3B82F6] hover:bg-blue-600 text-white flex items-center justify-center transition-transform active:scale-95 shadow-md border-[3px] border-[var(--background)]"
                   aria-label="Add Friend"
                 >
@@ -196,8 +236,9 @@ export default function ConnectionCard({
           </div>
         </div>
 
+        {/* 🛠️ FIX: Replaced the direct onNext call with handleNextClick */}
         <button 
-          onClick={onNext} 
+          onClick={handleNextClick} 
           className="w-full flex items-center justify-center gap-2 bg-[var(--background)] hover:bg-[var(--border-color)] border border-[var(--border-color)] text-[var(--text-main)] py-4 rounded-xl font-bold transition-all active:scale-[0.98] mt-2"
         >
           <UserPlus className="w-5 h-5" />
